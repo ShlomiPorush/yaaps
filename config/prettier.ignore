@@ -11,3 +11,4 @@ package-lock.json
 playwright-report/
 test-results/
 yaaps-example-report.html
+temp/
