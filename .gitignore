@@ -1,0 +1,19 @@
+.env
+.env.*
+!.env.example
+/docker-compose.dev.yml
+/scripts/
+.local-data/
+.try-pr/
+coverage/
+dist/
+node_modules/
+playwright-report/
+test-results/
+*.log
+*.tgz
+data/
+temp/
+# Local working artifacts
+/design-plans/
+/yaaps-example-report.html

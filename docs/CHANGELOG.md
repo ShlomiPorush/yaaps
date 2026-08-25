@@ -1,0 +1,24 @@
+# Changelog
+
+All notable changes to YAAPS are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## Unreleased
+
+## [1.0.0] - 2026-08-26
+
+Initial release.
+
+### Added
+
+- Passkey (WebAuthn) authentication with invitations, optional open self-registration, recovery codes, revocable sessions, roles, and audit events.
+- Owner-scoped report drafts with immutable versions, configurable expiry, scheduled retention cleanup, and public capability URLs under `/d/`.
+- Strict server-side HTML validation and sandboxed report serving that blocks scripts, forms, frames, plugins, and network access.
+- Bearer API keys and a browser-approved agent connection flow that keeps the full key out of chat, shell history, and the server.
+- The `yaaps-ai` CLI for connecting, publishing self-contained HTML with local bitmap embedding, and managing draft lifecycle.
+- A provider-neutral Agent Skill with Windows, macOS, and Linux helpers, origin-bound installers, and Codex and Claude packaging.
+- A localized English and Hebrew dashboard with RTL and LTR layouts, light and dark themes, and responsive desktop and mobile support.
+- An OpenAPI 3.1 contract with self-hosted Swagger UI and ReDoc documentation.
+- SQLite metadata with content-addressed immutable HTML storage, coordinated backup and restore, and startup orphan recovery.
+- A hardened Docker image and Compose deployment, full local verification tooling, and tag-driven publication of the container image and npm package.

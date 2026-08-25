@@ -1,0 +1,153 @@
+name: Container image
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+
+env:
+  NODE_VERSION: 24.17.0
+
+jobs:
+  publish:
+    name: Verify and publish the release image
+    if: github.ref_type == 'tag'
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate the release tag
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if [[ ! "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+            printf 'Release tag must be valid SemVer prefixed with v: %s\n' "$GITHUB_REF_NAME" >&2
+            exit 1
+          fi
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          cache: npm
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: https://registry.npmjs.org
+      - name: Install dependencies
+        run: npm ci
+      - name: Require the tag to match the reported product version
+        shell: bash
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          repository_version="$(tr -d '[:space:]' <VERSION)"
+          package_version="$(node -p "require('./package.json').version")"
+          constant_version="$(node -p "require('fs').readFileSync('packages/contracts/src/index.ts','utf8').match(/FOUNDATION_VERSION = \"([^\"]+)\"/)[1]")"
+          cli_version="$(node -p "require('./packages/cli/package.json').version")"
+          if [[ "$tag_version" != "$package_version" || "$tag_version" != "$constant_version" || "$tag_version" != "$cli_version" ]]; then
+            printf 'Tag %s does not match package.json (%s), FOUNDATION_VERSION (%s), or the CLI package version (%s). Sync versions before releasing.\n' \
+              "$tag_version" "$package_version" "$constant_version" "$cli_version" >&2
+            exit 1
+          fi
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Verify the release source
+        run: npm run verify
+      - name: Retain browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          if-no-files-found: ignore
+          name: container-release-failure-${{ github.run_id }}
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+      - name: Build and publish the release image
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+
+          version="${GITHUB_REF_NAME#v}"
+          repository="ghcr.io/${GITHUB_REPOSITORY,,}"
+          safe_version="${version//+/_}"
+          local_image="yaaps-release:${GITHUB_SHA}"
+          tags=(
+            "$repository:$safe_version"
+            "$repository:sha-$GITHUB_SHA"
+          )
+          if [[ "$version" != *-* ]]; then
+            tags+=("$repository:latest")
+          fi
+
+          docker build \
+            --file infra/docker/Dockerfile \
+            --label "org.opencontainers.image.created=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+            --label "org.opencontainers.image.version=$version" \
+            --target runtime \
+            --tag "$local_image" \
+            .
+
+          printf '%s' "$GHCR_TOKEN" |
+            docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          for tag in "${tags[@]}"; do
+            docker tag "$local_image" "$tag"
+            docker push "$tag"
+          done
+
+          {
+            printf '### Published container image\n\n'
+            printf -- '- %s\n' "${tags[@]}"
+          } >>"$GITHUB_STEP_SUMMARY"
+      # Authenticates through the npm Trusted Publisher (OIDC) configured for
+      # this repository and workflow file; no token secret is involved and
+      # provenance is generated automatically.
+      - name: Publish the CLI package to npm
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          npm publish --workspace yaaps-ai --access public
+          printf '### Published npm package\n\n- yaaps-ai@%s\n' "${GITHUB_REF_NAME#v}" >>"$GITHUB_STEP_SUMMARY"
+
+  release:
+    name: Create the GitHub release
+    needs: publish
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Create the release from the changelog
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" \
+            '$0 ~ "^## \\[" v "\\]" {found=1; next} found && /^## / {exit} found {print}' \
+            docs/CHANGELOG.md >release-notes.md
+          if [[ ! -s release-notes.md ]]; then
+            printf 'No changelog section found for %s; using the tag name only.\n' "$version" >&2
+            printf 'Release %s.\n' "$GITHUB_REF_NAME" >release-notes.md
+          fi
+          gh release create "$GITHUB_REF_NAME" --verify-tag \
+            --title "$GITHUB_REF_NAME" --notes-file release-notes.md

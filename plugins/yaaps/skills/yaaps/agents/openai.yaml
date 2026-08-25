@@ -1,0 +1,7 @@
+interface:
+  display_name: "YAAPS"
+  short_description: "Publish and manage temporary HTML reports"
+  default_prompt: "Use $yaaps to publish this HTML report and return its public URL."
+
+policy:
+  allow_implicit_invocation: true

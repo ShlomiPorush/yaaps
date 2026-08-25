@@ -1,0 +1,58 @@
+{
+  "name": "yaaps-workspace",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Self-hosted HTML report publishing for agents.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=24 <25",
+    "npm": ">=11 <12"
+  },
+  "workspaces": [
+    "packages/contracts",
+    "apps/dashboard",
+    "apps/server",
+    "packages/cli"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace @yaaps/contracts && npm run build --workspace @yaaps/dashboard && npm run build --workspace @yaaps/server && npm run build --workspace yaaps-ai",
+    "check:format": "prettier --ignore-path config/prettier.ignore --check .",
+    "data": "node apps/server/dist/operations/backup-cli.js",
+    "format": "prettier --ignore-path config/prettier.ignore --write .",
+    "guard": "bash .github/tools/guard.sh",
+    "lint": "eslint --config config/eslint.config.mjs .",
+    "package:check": "npm pack --workspace yaaps-ai --dry-run --json",
+    "pretest:e2e": "npm run build",
+    "smoke": "bash tests/operations/smoke.sh",
+    "test": "npm run test:unit && npm run test:workflows",
+    "test:e2e": "playwright test --config config/playwright.config.ts",
+    "test:e2e:run": "playwright test --config config/playwright.config.ts",
+    "test:load": "vitest --config config/vitest.config.ts run apps/server/src/reports/load.test.ts",
+    "test:unit": "vitest --config config/vitest.config.ts run",
+    "test:watch": "vitest --config config/vitest.config.ts",
+    "test:workflows": "bash tests/workflows/workflows.sh",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "verify": "bash .github/tools/verify.sh",
+    "version:sync": "node .github/tools/sync-version.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.62.1",
+    "@testing-library/jest-dom": "7.0.1",
+    "@testing-library/react": "16.3.2",
+    "@types/node": "26.2.0",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
+    "@vitejs/plugin-react": "6.1.0",
+    "eslint": "10.9.0",
+    "globals": "17.11.0",
+    "jsdom": "30.0.1",
+    "prettier": "3.9.6",
+    "tsx": "4.23.12",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.67.0",
+    "vite": "8.2.2",
+    "vitest": "4.1.11"
+  }
+}

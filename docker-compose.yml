@@ -1,0 +1,49 @@
+name: yaaps
+services:
+  app:
+    container_name: yaaps
+    image: ghcr.io/shlomiporush/yaaps:latest
+    restart: unless-stopped
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    volumes:
+      - ./data:/data
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/readyz').then(response => { if (!response.ok) process.exit(1) }).catch(() => process.exit(1))"
+      interval: 10s
+      timeout: 3s
+      start_period: 10s
+      retries: 6
+    stop_grace_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    env_file:
+      - ./.env
+    networks:
+      - traefik
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.yaaps.entrypoints=https
+      - traefik.http.routers.yaaps.rule=Host(`${YAAPS_HOSTNAME}`)
+      - traefik.http.routers.yaaps.tls=true
+      - traefik.http.routers.yaaps.service=yaaps
+      - traefik.http.routers.yaaps.middlewares=default@file
+      - traefik.http.services.yaaps.loadbalancer.server.port=3000
+      - traefik.docker.network=traefik
+
+networks:
+  traefik:
+    external: true

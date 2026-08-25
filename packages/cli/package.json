@@ -1,0 +1,36 @@
+{
+  "name": "yaaps-ai",
+  "version": "1.0.0",
+  "description": "Command-line client for YAAPS (yaaps.net): publish agent-made HTML reports as temporary shareable links.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "yaaps": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "prebuild": "npm run build --workspace @yaaps/contracts",
+    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && esbuild src/index.ts --bundle --platform=node --format=esm --target=node24 --external:commander --external:css-tree --external:parse5 --external:parse5-sax-parser --external:zod --outfile=dist/index.js --sourcemap",
+    "pretypecheck": "npm run build --workspace @yaaps/contracts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "commander": "15.0.0",
+    "css-tree": "3.2.1",
+    "parse5": "8.0.1",
+    "parse5-sax-parser": "8.0.0",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/css-tree": "3.2.0",
+    "@yaaps/contracts": "*",
+    "esbuild": "0.28.2"
+  }
+}

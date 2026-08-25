@@ -1,0 +1,13 @@
+.git
+.github
+.local-data
+.try-pr
+**/dist
+**/node_modules
+**/*.test.*
+coverage
+docs
+*.log
+**/.env
+**/.env.*
+

@@ -1,0 +1,13 @@
+.git/
+.local-data/
+.try-pr/
+coverage/
+data/
+design-plans/
+dist/
+docker-compose.dev.yml
+node_modules/
+package-lock.json
+playwright-report/
+test-results/
+yaaps-example-report.html

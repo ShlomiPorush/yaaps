@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <style>
+    .cut-y {
+      fill: #141414;
+    }
+    @media (prefers-color-scheme: dark) {
+      .cut-y {
+        fill: #f2eeda;
+      }
+    }
+  </style>
+  <mask
+    id="cut-y-mask"
+    maskUnits="userSpaceOnUse"
+    x="0"
+    y="0"
+    width="64"
+    height="64"
+  >
+    <rect width="64" height="64" fill="white" />
+    <path d="M14 25 30 9h10L21 34 14 25Z" fill="black" />
+  </mask>
+  <path
+    class="cut-y"
+    d="M2 6h17l13 19L45 6h17L40 36v22H24V36L2 6Z"
+    mask="url(#cut-y-mask)"
+  />
+</svg>

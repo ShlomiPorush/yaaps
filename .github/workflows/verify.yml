@@ -1,0 +1,300 @@
+name: Verify
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: "17 2 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  NODE_VERSION: 24.17.0
+
+jobs:
+  detect:
+    name: Detect affected areas
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      browser: ${{ steps.areas.outputs.browser }}
+      cli: ${{ steps.areas.outputs.cli }}
+      dashboard: ${{ steps.areas.outputs.dashboard }}
+      infrastructure: ${{ steps.areas.outputs.infrastructure }}
+      server: ${{ steps.areas.outputs.server }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Detect paths
+        id: areas
+        shell: bash
+        env:
+          DETECT_BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
+        run: |
+          arguments=(
+            --base "$DETECT_BASE"
+            --head "$GITHUB_SHA"
+          )
+          if [[ "$GITHUB_EVENT_NAME" == "schedule" || "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            arguments+=(--full)
+          fi
+          bash ./.github/tools/ci-detect.sh "${arguments[@]}"
+
+  quality:
+    name: Repository quality
+    needs: detect
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          cache: npm
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm ci
+      - run: npm run guard
+      - run: npm run check:format
+      - run: npm run lint
+
+  server:
+    name: Server
+    if: needs.detect.outputs.server == 'true'
+    needs: detect
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          cache: npm
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm ci
+      - run: npm run typecheck --workspace @yaaps/server
+      - run: npx vitest --config config/vitest.config.ts run apps/server
+      - run: npm run build --workspace @yaaps/server
+
+  dashboard:
+    name: Dashboard
+    if: needs.detect.outputs.dashboard == 'true'
+    needs: detect
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          cache: npm
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm ci
+      - run: npm run typecheck --workspace @yaaps/dashboard
+      - run: npx vitest --config config/vitest.config.ts run apps/dashboard
+      - run: npm run build --workspace @yaaps/dashboard
+
+  cli:
+    name: CLI
+    if: needs.detect.outputs.cli == 'true'
+    needs: detect
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          cache: npm
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm ci
+      - run: npm run typecheck --workspace yaaps-ai
+      - run: npx vitest --config config/vitest.config.ts run packages/cli packages/contracts
+      - run: npm run build --workspace yaaps-ai
+      - run: npm run package:check
+
+  cli-windows:
+    name: CLI helpers on Windows
+    if: needs.detect.outputs.cli == 'true' || needs.detect.outputs.infrastructure == 'true'
+    needs: detect
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          cache: npm
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm ci
+      - run: npx vitest --config config/vitest.config.ts run packages/cli/src/skill-helper.integration.test.ts
+
+  browser:
+    name: Browser security and product flow
+    if: needs.detect.outputs.browser == 'true'
+    needs: detect
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          cache: npm
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - name: Retain browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          if-no-files-found: ignore
+          name: browser-failure-${{ github.run_id }}
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+
+  infrastructure:
+    name: Workflows and Compose
+    if: needs.detect.outputs.infrastructure == 'true'
+    needs: detect
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          cache: npm
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm ci
+      - name: Validate GitHub Actions syntax
+        run: >-
+          docker run --rm
+          --volume "$GITHUB_WORKSPACE:/repo:ro"
+          --workdir /repo
+          rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+      - run: npm run test:workflows
+      - name: Exercise the skill installers end to end
+        run: bash plugins/yaaps/distribution/test-skill-installers.sh
+      - run: npm run build
+      - run: npm run package:check
+      - name: Validate Compose definitions
+        shell: bash
+        run: |
+          source ./.github/tools/verify.sh
+          test_compose_definitions
+
+  docker:
+    name: Production-shaped Docker
+    if: needs.detect.outputs.server == 'true' || needs.detect.outputs.infrastructure == 'true'
+    needs: detect
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build and verify the runtime image
+        shell: bash
+        run: bash ./.github/tools/docker-verify.sh
+
+  audit:
+    name: Dependency audit
+    needs: detect
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          cache: npm
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm audit --audit-level=high
+
+  final-summary:
+    name: Final required summary
+    if: always()
+    needs:
+      - detect
+      - quality
+      - server
+      - dashboard
+      - cli
+      - cli-windows
+      - browser
+      - infrastructure
+      - docker
+      - audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every applicable job
+        shell: bash
+        env:
+          AUDIT_RESULT: ${{ needs.audit.result }}
+          BROWSER_RESULT: ${{ needs.browser.result }}
+          CLI_RESULT: ${{ needs.cli.result }}
+          CLI_WINDOWS_RESULT: ${{ needs['cli-windows'].result }}
+          DASHBOARD_RESULT: ${{ needs.dashboard.result }}
+          DETECT_RESULT: ${{ needs.detect.result }}
+          DOCKER_RESULT: ${{ needs.docker.result }}
+          INFRASTRUCTURE_RESULT: ${{ needs.infrastructure.result }}
+          QUALITY_RESULT: ${{ needs.quality.result }}
+          SERVER_RESULT: ${{ needs.server.result }}
+        run: |
+          results=(
+            "detect=$DETECT_RESULT"
+            "quality=$QUALITY_RESULT"
+            "server=$SERVER_RESULT"
+            "dashboard=$DASHBOARD_RESULT"
+            "cli=$CLI_RESULT"
+            "cli-windows=$CLI_WINDOWS_RESULT"
+            "browser=$BROWSER_RESULT"
+            "infrastructure=$INFRASTRUCTURE_RESULT"
+            "docker=$DOCKER_RESULT"
+            "audit=$AUDIT_RESULT"
+          )
+          printf -- '- %s\n' "${results[@]}" >>"$GITHUB_STEP_SUMMARY"
+          if printf '%s\n' "${results[@]}" | grep -Eq '=(failure|cancelled)$'; then
+            printf 'At least one required verification job failed or was cancelled.\n' >&2
+            exit 1
+          fi

@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "yaaps",
+  "displayName": "YAAPS",
+  "version": "0.0.0",
+  "description": "Publish and manage temporary HTML reports with YAAPS.",
+  "author": {
+    "name": "Shlomi Porush"
+  },
+  "license": "MIT",
+  "keywords": ["yaaps", "reports", "publishing", "html"]
+}

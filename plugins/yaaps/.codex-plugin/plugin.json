@@ -1,0 +1,24 @@
+{
+  "name": "yaaps",
+  "version": "0.0.0",
+  "description": "Publish and manage temporary HTML reports with YAAPS.",
+  "author": {
+    "name": "Shlomi Porush"
+  },
+  "license": "MIT",
+  "keywords": ["yaaps", "reports", "publishing", "html"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "YAAPS",
+    "shortDescription": "Publish and manage temporary HTML reports.",
+    "longDescription": "Connect to a self-hosted YAAPS service, publish or update HTML reports, and manage report access through the YAAPS CLI.",
+    "developerName": "Shlomi Porush",
+    "category": "Productivity",
+    "capabilities": ["Interactive", "Write"],
+    "defaultPrompt": [
+      "Use YAAPS to publish this HTML report and return its public URL.",
+      "Use YAAPS to update the report at this path.",
+      "Use YAAPS to list my published reports."
+    ]
+  }
+}
