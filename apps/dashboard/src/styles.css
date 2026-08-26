@@ -337,6 +337,8 @@ p {
 }
 
 .publishing-illustration {
+  --publishing-chat-font:
+    "Rubik Variable", "Heebo Variable", ui-sans-serif, system-ui, sans-serif;
   --publishing-surface: var(--card);
   --publishing-ink: var(--ink);
   --publishing-muted: var(--muted);
@@ -350,6 +352,7 @@ p {
   border: 2px solid var(--ink);
   background: var(--publishing-surface);
   color: var(--publishing-ink);
+  font-family: var(--publishing-chat-font);
 }
 
 :root[data-theme="dark"] .publishing-illustration {
@@ -386,7 +389,6 @@ p {
 
 .publishing-message > small {
   color: var(--publishing-muted);
-  font-family: var(--mono);
   font-size: 0.68rem;
   font-weight: 900;
   letter-spacing: 0.1em;
@@ -404,7 +406,6 @@ p {
   border: 1px solid color-mix(in srgb, var(--publishing-ink) 34%, transparent);
   border-radius: 18px;
   background: color-mix(in srgb, var(--publishing-ink) 7%, transparent);
-  font-family: var(--mono);
 }
 
 .publishing-request-bubble {
@@ -434,6 +435,10 @@ p {
   letter-spacing: 0.02em;
 }
 
+.publishing-skill-tag {
+  font-family: var(--mono);
+}
+
 .publishing-success {
   font-weight: 850;
 }
@@ -444,7 +449,6 @@ p {
   align-items: center;
   gap: 9px;
   color: var(--publishing-muted);
-  font-family: var(--mono);
 }
 
 .publishing-processing-mark {
@@ -500,6 +504,7 @@ p {
 }
 
 .publishing-share-link {
+  font-family: var(--mono);
   font-size: clamp(0.75rem, 1.5vw, 0.95rem);
   font-weight: 900;
   overflow-wrap: anywhere;

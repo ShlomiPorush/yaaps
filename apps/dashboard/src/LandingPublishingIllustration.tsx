@@ -35,7 +35,9 @@ export function LandingPublishingIllustration({
             <p className="publishing-request">
               <span>{copy.dashboard.terminalPromptBeforeSkill}</span>{" "}
               <strong>
-                <bdi dir="ltr">{YAAPS_SKILL_TAG}</bdi>
+                <bdi className="publishing-skill-tag" dir="ltr">
+                  {YAAPS_SKILL_TAG}
+                </bdi>
               </strong>{" "}
               <span>{copy.dashboard.terminalPromptAfterSkill}</span>
             </p>

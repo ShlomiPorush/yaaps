@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@fontsource-variable/heebo": "5.3.0",
+    "@fontsource-variable/rubik": "5.3.0",
     "@simplewebauthn/browser": "13.3.0",
     "@yaaps/contracts": "*",
     "react": "19.2.8",
