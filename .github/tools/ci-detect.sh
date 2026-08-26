@@ -6,6 +6,48 @@ source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)/common.sh"
 
 declare -Ag CI_AREAS=()
 
+# The exact set of files a release pull request is allowed to touch: the
+# version sources kept in step by npm run version:sync, plus the changelog.
+declare -ag CI_RELEASE_FILES=(
+  VERSION
+  package.json
+  package-lock.json
+  docs/CHANGELOG.md
+  apps/server/package.json
+  apps/dashboard/package.json
+  packages/cli/package.json
+  packages/contracts/package.json
+  packages/contracts/src/index.ts
+)
+
+# True when the change is a version bump and nothing else. VERSION must be
+# part of it, because an ordinary dependency pull request also touches
+# package.json and package-lock.json and still needs the full matrix.
+test_release_only_change() {
+  local file candidate normalized
+  local version_changed=false
+  local matched
+
+  (($# > 0)) || return 1
+
+  for file in "$@"; do
+    normalized="${file//\\//}"
+    if [[ "$normalized" == "VERSION" ]]; then
+      version_changed=true
+    fi
+    matched=false
+    for candidate in "${CI_RELEASE_FILES[@]}"; do
+      if [[ "$normalized" == "$candidate" ]]; then
+        matched=true
+        break
+      fi
+    done
+    [[ "$matched" == "true" ]] || return 1
+  done
+
+  [[ "$version_changed" == "true" ]]
+}
+
 get_ci_affected_areas() {
   local full="$1"
   shift
@@ -21,6 +63,14 @@ get_ci_affected_areas() {
   )
   if [[ "$full" == "true" ]]; then
     for file in "${!CI_AREAS[@]}"; do CI_AREAS["$file"]=true; done
+    return
+  fi
+
+  # A release pull request is the only change allowed to edit VERSION, and the
+  # v* tag workflow reruns npm run verify before publishing anything, so the
+  # heavy matrix here would only repeat that gate. Any file outside the release
+  # set falls through to normal detection and restores the full checks.
+  if test_release_only_change "$@"; then
     return
   fi
 

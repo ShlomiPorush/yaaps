@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Changed
+
+- Merges to main no longer rerun the full verification matrix, and a release pull request that only bumps the version files now runs the light quality checks alone; pull requests, the weekly scheduled run, and the release tag remain the verification gates, and the release tag reruns full verification before anything is published.
+
 ## [1.1.0] - 2026-08-26
 
 ### Added

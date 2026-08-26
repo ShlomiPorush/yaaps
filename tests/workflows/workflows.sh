@@ -75,4 +75,36 @@ get_ci_affected_areas false tests/workflows/workflows.sh
 assert_equal "${CI_AREAS[infrastructure]}" true "Workflow test path detection"
 assert_equal "${CI_AREAS[server]}" false "Workflow test path skips server"
 
+release_change=(
+  VERSION
+  package.json
+  package-lock.json
+  docs/CHANGELOG.md
+  apps/server/package.json
+  apps/dashboard/package.json
+  packages/cli/package.json
+  packages/contracts/package.json
+  packages/contracts/src/index.ts
+)
+get_ci_affected_areas false "${release_change[@]}"
+assert_equal "${CI_AREAS[server]}" false "Release change skips server"
+assert_equal "${CI_AREAS[dashboard]}" false "Release change skips dashboard"
+assert_equal "${CI_AREAS[cli]}" false "Release change skips CLI"
+assert_equal "${CI_AREAS[browser]}" false "Release change skips browser"
+assert_equal "${CI_AREAS[infrastructure]}" false "Release change skips infrastructure"
+get_ci_affected_areas false 'packages\cli\package.json' 'VERSION'
+assert_equal "${CI_AREAS[cli]}" false "Release change normalizes backslash paths"
+get_ci_affected_areas false "${release_change[@]}" apps/server/src/app.ts
+assert_equal "${CI_AREAS[server]}" true "Release change with source falls back to server"
+assert_equal "${CI_AREAS[browser]}" true "Release change with source falls back to browser"
+get_ci_affected_areas false VERSION
+assert_equal "${CI_AREAS[server]}" false "Version bump alone skips server"
+assert_equal "${CI_AREAS[infrastructure]}" false "Version bump alone skips infrastructure"
+get_ci_affected_areas false package.json package-lock.json
+assert_equal "${CI_AREAS[server]}" true "Dependency change without VERSION keeps server"
+assert_equal "${CI_AREAS[dashboard]}" true "Dependency change without VERSION keeps dashboard"
+assert_equal "${CI_AREAS[cli]}" true "Dependency change without VERSION keeps CLI"
+assert_equal "${CI_AREAS[browser]}" true "Dependency change without VERSION keeps browser"
+assert_equal "${CI_AREAS[infrastructure]}" true "Dependency change without VERSION keeps infrastructure"
+
 printf '%d Bash workflow tests passed.\n' "$PASSED_TESTS"
