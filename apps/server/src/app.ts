@@ -364,6 +364,7 @@ export async function buildApplication(
       authentication: application.yaapsData.authentication,
       drafts: application.yaapsData.drafts,
       publicOrigin,
+      retention,
       secureCookies: authentication.secureCookies,
     });
     await registerPublicReportRoutes(application, {

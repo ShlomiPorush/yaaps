@@ -9,10 +9,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - API keys can be renamed from the dashboard, so a key's name can stay meaningful without revoking and recreating it.
+- A report's expiry can be extended from the dashboard with one-day, one-week, or 30-day presets counted from the moment of the change, within the instance retention limits. The agent API accepts the same `ttlSeconds` field when updating a draft.
 
 ### Changed
 
 - A report's title in the dashboard now opens the shared report directly, and the open-report link looks like the other row actions instead of a plain text link.
+- The report list shows the expiry date in the device's regional date format, with the remaining time in parentheses.
 
 ### Fixed
 

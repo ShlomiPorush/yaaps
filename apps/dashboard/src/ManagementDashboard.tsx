@@ -2,6 +2,7 @@ import type {
   ApiKeySummary,
   DraftSummary,
   DraftVersionSummary,
+  PublicServiceMetadata,
 } from "@yaaps/contracts";
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 
@@ -10,6 +11,8 @@ import { RecoveryCodes } from "./RecoveryCodes.js";
 import { AdministrationPanel } from "./AdministrationPanel.js";
 import {
   formatDate as formatLocaleDate,
+  formatDeviceDate,
+  formatRemainingDuration,
   type Locale,
   type LocaleDocument,
 } from "./localization.js";
@@ -62,6 +65,10 @@ export function ManagementDashboard({
   const [confirmRevoke, setConfirmRevoke] = useState<string | null>(null);
   const [renamingKey, setRenamingKey] = useState<string | null>(null);
   const [renameLabel, setRenameLabel] = useState("");
+  const [extendingDraft, setExtendingDraft] = useState<string | null>(null);
+  const [retentionLimits, setRetentionLimits] = useState<
+    PublicServiceMetadata["limits"] | null
+  >(null);
   const [confirmRegenerateCodes, setConfirmRegenerateCodes] = useState(false);
   const [regeneratedCodes, setRegeneratedCodes] = useState<string[]>([]);
 
@@ -76,6 +83,16 @@ export function ManagementDashboard({
     void (async () => {
       try {
         if (effectiveView === "reports") {
+          // Retention limits only trim the extend options, so a metadata
+          // failure must not take down the report list with it.
+          void api
+            .serviceMetadata()
+            .then((metadata) => {
+              if (active) {
+                setRetentionLimits(metadata.limits);
+              }
+            })
+            .catch(() => undefined);
           const [draftResponse, keyResponse] = await Promise.all([
             api.listDrafts(),
             api.listApiKeys(),
@@ -110,6 +127,14 @@ export function ManagementDashboard({
 
   const formatDate = (value: string) => formatLocaleDate(locale, value);
 
+  const formatExpiry = (value: string) => {
+    const remaining = formatRemainingDuration(locale, value);
+    const note = remaining
+      ? copy.management.remaining.replace("{duration}", remaining)
+      : copy.management.expired;
+    return `${formatDeviceDate(value)} (${note})`;
+  };
+
   async function withRequest(operation: () => Promise<void>) {
     setRequestBusy(true);
     setRequestError(false);
@@ -130,6 +155,27 @@ export function ManagementDashboard({
       setDrafts((current) =>
         current.map((item) => (item.id === updated.id ? updated : item)),
       );
+    });
+  }
+
+  const extendChoices = [
+    { label: copy.management.extendDay, seconds: 24 * 60 * 60 },
+    { label: copy.management.extendWeek, seconds: 7 * 24 * 60 * 60 },
+    { label: copy.management.extendMonth, seconds: 30 * 24 * 60 * 60 },
+  ].filter(
+    (choice) =>
+      !retentionLimits ||
+      (choice.seconds >= retentionLimits.minimumTtlSeconds &&
+        choice.seconds <= retentionLimits.maximumTtlSeconds),
+  );
+
+  async function extendDraft(draftId: string, ttlSeconds: number) {
+    await withRequest(async () => {
+      const updated = await api.updateDraft(draftId, { ttlSeconds });
+      setDrafts((current) =>
+        current.map((item) => (item.id === updated.id ? updated : item)),
+      );
+      setExtendingDraft(null);
     });
   }
 
@@ -257,7 +303,7 @@ export function ManagementDashboard({
                 <p className="draft-meta">
                   {copy.management.version} {draft.latestVersionNumber}
                   <span aria-hidden="true"> · </span>
-                  {copy.management.expires} {formatDate(draft.expiresAt)}
+                  {copy.management.expires} {formatExpiry(draft.expiresAt)}
                 </p>
               </div>
               <a
@@ -291,6 +337,37 @@ export function ManagementDashboard({
                   ? copy.management.disable
                   : copy.management.enable}
               </button>
+              {extendingDraft === draft.id ? (
+                <span className="confirm-actions">
+                  {extendChoices.map((choice) => (
+                    <button
+                      className="text-button"
+                      disabled={requestBusy}
+                      key={choice.seconds}
+                      type="button"
+                      onClick={() => void extendDraft(draft.id, choice.seconds)}
+                    >
+                      {choice.label}
+                    </button>
+                  ))}
+                  <button
+                    className="text-button"
+                    type="button"
+                    onClick={() => setExtendingDraft(null)}
+                  >
+                    {copy.management.cancel}
+                  </button>
+                </span>
+              ) : (
+                <button
+                  className="text-button"
+                  disabled={requestBusy}
+                  type="button"
+                  onClick={() => setExtendingDraft(draft.id)}
+                >
+                  {copy.management.extend}
+                </button>
+              )}
               {confirmDelete === draft.id ? (
                 <span className="confirm-actions">
                   <button

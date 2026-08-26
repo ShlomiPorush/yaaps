@@ -1,6 +1,7 @@
 import {
   draftIdSchema,
   paginationQuerySchema,
+  type RetentionPolicy,
   updateDraftRequestSchema,
 } from "@yaaps/contracts";
 import type { FastifyInstance } from "fastify";
@@ -11,7 +12,12 @@ import {
   AuthorizationError,
 } from "../auth/repository.js";
 import { requireBrowserCsrf, requireBrowserSession } from "../auth/routes.js";
-import { draftSummary, versionSummary } from "../reports/api-routes.js";
+import {
+  draftSummary,
+  expiration,
+  selectedTtl,
+  versionSummary,
+} from "../reports/api-routes.js";
 import {
   DraftNotFoundError,
   type DraftStorage,
@@ -25,6 +31,7 @@ export async function registerDashboardManagementRoutes(
     authentication: AuthenticationRepository;
     drafts: DraftStorage;
     publicOrigin: string;
+    retention: RetentionPolicy;
     secureCookies: boolean;
   },
 ): Promise<void> {
@@ -108,6 +115,11 @@ export async function registerDashboardManagementRoutes(
       await options.drafts.updateForOwner({
         apiKeyId: null,
         draftId,
+        // A new TTL always counts from now, mirroring publish semantics.
+        expiresAt:
+          update.ttlSeconds === undefined
+            ? undefined
+            : expiration(selectedTtl(update.ttlSeconds, options.retention)),
         ownerId: actor.userId,
         status: update.status,
         title: update.title,

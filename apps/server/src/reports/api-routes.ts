@@ -49,11 +49,11 @@ function bearerToken(request: FastifyRequest): string {
   return match[1];
 }
 
-function expiration(ttlSeconds: number): string {
+export function expiration(ttlSeconds: number): string {
   return new Date(Date.now() + ttlSeconds * 1_000).toISOString();
 }
 
-function selectedTtl(
+export function selectedTtl(
   requested: number | undefined,
   retention: RetentionPolicy,
 ): number {
@@ -274,6 +274,11 @@ export async function registerReportApiRoutes(
           await options.drafts.updateForOwner({
             apiKeyId: actor.apiKeyId,
             draftId,
+            // A new TTL always counts from now, mirroring publish semantics.
+            expiresAt:
+              update.ttlSeconds === undefined
+                ? undefined
+                : expiration(selectedTtl(update.ttlSeconds, options.retention)),
             ownerId: actor.userId,
             status: update.status,
             title: update.title,

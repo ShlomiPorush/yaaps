@@ -34,8 +34,14 @@ export const updateDraftRequestSchema = z
   .object({
     status: draftStatusSchema.optional(),
     title: draftTitleSchema.nullable().optional(),
+    ttlSeconds: ttlSecondsSchema.optional(),
   })
-  .refine((value) => value.status !== undefined || value.title !== undefined);
+  .refine(
+    (value) =>
+      value.status !== undefined ||
+      value.title !== undefined ||
+      value.ttlSeconds !== undefined,
+  );
 
 export const draftSummarySchema = z.object({
   createdAt: z.iso.datetime(),
