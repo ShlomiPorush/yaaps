@@ -24,6 +24,7 @@ import {
   AgentConnectPanel,
 } from "./AgentConnectPanel.js";
 import { ManagementDashboard } from "./ManagementDashboard.js";
+import { LandingPublishingIllustration } from "./LandingPublishingIllustration.js";
 
 type Theme = "dark" | "light";
 
@@ -765,7 +766,7 @@ export function App({
         ) : (
           <>
             <section
-              className="landing-lead"
+              className="landing-lead landing-publishing-hero"
               aria-labelledby="foundation-heading"
             >
               <p className="dateline">
@@ -775,9 +776,12 @@ export function App({
                   <bdi dir="ltr">YAAPS</bdi>: {copy.product.tagline}
                 </span>
               </p>
-              <h1 id="foundation-heading">{copy.dashboard.heading}</h1>
-              <div className="landing-lede">
-                <div>
+              <div className="landing-publishing-layout">
+                <div className="landing-publishing-copy">
+                  <p className="eyebrow" id="publishing-flow-heading">
+                    {copy.dashboard.statusHeading}
+                  </p>
+                  <h1 id="foundation-heading">{copy.dashboard.heading}</h1>
                   <p className="intro">{copy.dashboard.intro}</p>
                   <div className="hero-actions">
                     <a className="primary-link" href="/connect">
@@ -792,36 +796,12 @@ export function App({
                       {copy.dashboard.unavailable}
                     </p>
                   )}
-                  <ol className="landing-steps">
-                    {copy.dashboard.statusItems.map((item, index) => (
-                      <li key={item}>
-                        <span>{String(index + 1).padStart(2, "0")}</span>
-                        {item}
-                      </li>
-                    ))}
-                  </ol>
                 </div>
+                <LandingPublishingIllustration copy={copy} locale={locale} />
               </div>
             </section>
 
-            <div className="terminal-strip">
-              <small>{copy.dashboard.terminalLabel}</small>
-              <code>
-                <bdi dir="ltr">
-                  <span>&gt;</span>
-                </bdi>{" "}
-                {copy.dashboard.terminalPrompt}
-              </code>
-              <code className="terminal-strip-result">
-                <span>{copy.dashboard.terminalResponseLabel}</span>{" "}
-                <bdi dir="ltr">{copy.dashboard.terminalResult}</bdi>
-              </code>
-            </div>
-
-            <section
-              className="feature-index"
-              aria-label={copy.dashboard.statusHeading}
-            >
+            <section className="feature-index">
               {copy.dashboard.featureTitles.map((title, index) => (
                 <article key={title}>
                   <span className="feature-number" aria-hidden="true">

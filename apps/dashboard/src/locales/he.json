@@ -136,9 +136,14 @@
       "מאשרים את החיבור הראשון ומקבלים קישור לשיתוף"
     ],
     "terminalLabel": "מה שמבקשים מה-AI",
-    "terminalPrompt": "פרסם את הדוח הזה עם YAAPS למשך 24 שעות",
+    "terminalPrompt": "פרסם את הדוח הזה עם $yaaps למשך 24 שעות",
+    "terminalPromptBeforeSkill": "פרסם את הדוח הזה עם",
+    "terminalPromptAfterSkill": "למשך 24 שעות",
     "terminalResponseLabel": "ה-AI שלכם",
-    "terminalResult": "https://share.example.com/d/8K2...Qp",
+    "terminalSuccess": "הדוח פורסם ב-YAAPS ל-24 שעות.",
+    "terminalOpenReport": "פתיחת הדוח",
+    "terminalResult": "https://yaaps.net/d/8K2...Qp",
+    "terminalExpiresAt": "בתוקף עד",
     "unavailable": "יש לכם חשבון? היכנסו כדי לראות את הדוחות ולנהל את הגישה של הסוכנים שלכם."
   },
   "docs": {

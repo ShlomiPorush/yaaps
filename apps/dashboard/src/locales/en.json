@@ -136,9 +136,14 @@
       "Approve the first connection and get a link to share"
     ],
     "terminalLabel": "What you say to your AI",
-    "terminalPrompt": "Publish this report with YAAPS for 24 hours",
+    "terminalPrompt": "Publish this report with $yaaps for 24 hours",
+    "terminalPromptBeforeSkill": "Publish this report with",
+    "terminalPromptAfterSkill": "for 24 hours",
     "terminalResponseLabel": "Your AI",
-    "terminalResult": "https://share.example.com/d/8K2...Qp",
+    "terminalSuccess": "The report was published to YAAPS for 24 hours.",
+    "terminalOpenReport": "Open report",
+    "terminalResult": "https://yaaps.net/d/8K2...Qp",
+    "terminalExpiresAt": "Available until",
     "unavailable": "Already have an account? Sign in to see your reports and manage agent access."
   },
   "docs": {

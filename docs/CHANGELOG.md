@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- The public landing page now explains publishing through a localized chat illustration that shows a natural-language request, YAAPS processing, and a temporary report link with its live expiry time.
 - Merges to main no longer rerun the full verification matrix, and a release pull request that only bumps the version files now runs the light quality checks alone; pull requests, the weekly scheduled run, and the release tag remain the verification gates, and the release tag reruns full verification before anything is published.
 
 ## [1.1.0] - 2026-08-26
