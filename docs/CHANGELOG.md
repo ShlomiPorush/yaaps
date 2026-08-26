@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Added
+
+- A monthly GitHub Actions check now raises the deferred upgrades for discussion when Node.js 26 reaches LTS or the latest typescript-eslint release supports TypeScript 7, without changing dependencies or creating duplicate issues.
+
 ### Changed
 
 - Merges to main no longer rerun the full verification matrix, and a release pull request that only bumps the version files now runs the light quality checks alone; pull requests, the weekly scheduled run, and the release tag remain the verification gates, and the release tag reruns full verification before anything is published.
