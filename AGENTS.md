@@ -77,3 +77,5 @@ Releases require explicit owner authorization and happen in a dedicated release 
 ## Git and external boundaries
 
 The repository owner controls merges, releases, deployments, production changes, DNS, GitHub configuration, and registry publication. Do not perform them without explicit authorization in the current request.
+
+After an explicitly authorized merge completes, delete the merged topic branch both locally and from its remote. First verify the merge, switch to and update the default branch, and use safe deletion. Never delete the current, default, protected, or unmerged branch; treat an already absent branch as clean.
