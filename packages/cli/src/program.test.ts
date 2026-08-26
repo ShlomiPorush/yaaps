@@ -2,12 +2,18 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { readCliConfig, writeCliConfig } from "./config.js";
-import { createProgram, shouldOpenVerificationUrl } from "./program.js";
+import {
+  createProgram,
+  escapeDraftIdOperands,
+  shouldOpenVerificationUrl,
+} from "./program.js";
 
 const temporaryPaths: string[] = [];
+
+const dashDraftId = "-kE3bGEycgPf3BtwUKGyvs1mlgTulCu1";
 
 async function temporaryDirectory(): Promise<string> {
   const directory = await mkdtemp(path.join(tmpdir(), "yaaps-cli-program-"));
@@ -84,5 +90,164 @@ describe("CLI program safety", () => {
 
     expect(output.join("\n")).toContain("yaaps_visibleprefix");
     expect(output.join("\n")).not.toContain("hiddensecret");
+  });
+});
+
+describe("CLI draft ID escaping", () => {
+  it("hoists a dash-leading draft ID operand behind a terminator", () => {
+    const program = createProgram();
+
+    expect(escapeDraftIdOperands(program, ["disable", dashDraftId])).toEqual([
+      "disable",
+      "--",
+      dashDraftId,
+    ]);
+    expect(escapeDraftIdOperands(program, ["inspect", dashDraftId])).toEqual([
+      "inspect",
+      "--",
+      dashDraftId,
+    ]);
+  });
+
+  it("keeps a dash-leading draft ID attached to the option that takes it", () => {
+    const program = createProgram();
+
+    expect(
+      escapeDraftIdOperands(program, [
+        "delete",
+        dashDraftId,
+        "--confirm",
+        dashDraftId,
+      ]),
+    ).toEqual(["delete", "--confirm", dashDraftId, "--", dashDraftId]);
+  });
+
+  it("never hoists an option value that looks like a draft ID", () => {
+    const program = createProgram();
+    const argv = ["publish", "report.html", "--title", dashDraftId];
+
+    expect(escapeDraftIdOperands(program, argv)).toEqual(argv);
+  });
+
+  it("keeps existing passthrough operands after the hoisted draft IDs", () => {
+    const program = createProgram();
+
+    expect(
+      escapeDraftIdOperands(program, [
+        "delete",
+        dashDraftId,
+        "--confirm",
+        dashDraftId,
+        "--",
+        "already-passed-through",
+      ]),
+    ).toEqual([
+      "delete",
+      "--confirm",
+      dashDraftId,
+      "--",
+      dashDraftId,
+      "already-passed-through",
+    ]);
+  });
+
+  it("returns argv unchanged when no token looks like a draft ID", () => {
+    const program = createProgram();
+    const argv = ["list", "--limit", "10", "--json"];
+
+    expect(escapeDraftIdOperands(program, argv)).toEqual(argv);
+  });
+});
+
+describe("CLI commands with dash-leading draft IDs", () => {
+  const summary = {
+    createdAt: "2026-08-26T00:00:00.000Z",
+    expiresAt: "2026-08-27T00:00:00.000Z",
+    id: dashDraftId,
+    latestVersionNumber: 1,
+    publicUrl: `https://share.example.test/d/${dashDraftId}`,
+    status: "disabled",
+    title: "Dash report",
+    updatedAt: "2026-08-26T00:00:00.000Z",
+  };
+
+  async function buildProgram(response: Response) {
+    const configDirectory = await temporaryDirectory();
+    const errors: string[] = [];
+    const output: string[] = [];
+    const requests: Array<{ body: string; method: string; url: string }> = [];
+    const fetchImplementation = vi.fn(
+      async (input: string | URL | Request, init?: RequestInit) => {
+        requests.push({
+          body: String(init?.body ?? ""),
+          method: String(init?.method ?? "GET"),
+          url: String(input),
+        });
+        return response.clone();
+      },
+    ) as unknown as typeof fetch;
+    const program = createProgram({
+      configDirectory,
+      environment: {
+        YAAPS_API_KEY: "yaaps_prefix_secret",
+        YAAPS_API_URL: "https://share.example.test",
+      },
+      fetchImplementation,
+      writeError: (message) => errors.push(message),
+      writeOutput: (message) => output.push(message),
+    });
+    return { errors, output, program, requests };
+  }
+
+  it("disables a draft whose ID starts with a dash", async () => {
+    const { errors, output, program, requests } = await buildProgram(
+      new Response(JSON.stringify(summary), {
+        headers: { "content-type": "application/json" },
+        status: 200,
+      }),
+    );
+
+    await program.parseAsync(
+      escapeDraftIdOperands(program, ["disable", dashDraftId]),
+      { from: "user" },
+    );
+
+    expect(errors).toEqual([]);
+    expect(process.exitCode).not.toBe(1);
+    expect(requests).toEqual([
+      {
+        body: '{"status":"disabled"}',
+        method: "PATCH",
+        url: `https://share.example.test/api/drafts/${dashDraftId}`,
+      },
+    ]);
+    expect(output.join("\n")).toContain(`${dashDraftId} is now disabled.`);
+  });
+
+  it("deletes a draft whose ID starts with a dash", async () => {
+    const { errors, output, program, requests } = await buildProgram(
+      new Response(null, { status: 204 }),
+    );
+
+    await program.parseAsync(
+      escapeDraftIdOperands(program, [
+        "delete",
+        dashDraftId,
+        "--confirm",
+        dashDraftId,
+      ]),
+      { from: "user" },
+    );
+
+    expect(errors).toEqual([]);
+    expect(process.exitCode).not.toBe(1);
+    expect(requests).toEqual([
+      {
+        body: "",
+        method: "DELETE",
+        url: `https://share.example.test/api/drafts/${dashDraftId}`,
+      },
+    ]);
+    expect(output.join("\n")).toContain(`Deleted draft ${dashDraftId}.`);
   });
 });

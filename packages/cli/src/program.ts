@@ -80,6 +80,56 @@ function boundedIntegerOption(
   };
 }
 
+const DRAFT_ID_OPERAND = /^-[A-Za-z0-9_-]{31}$/;
+
+// Draft IDs are 32 random base64url characters, so roughly one in 64 starts
+// with "-", which commander would reject as an unknown option. Commander has
+// no operand escape besides "--", so the raw argv is rewritten to hoist such
+// IDs behind one terminator while option values stay attached to their flags.
+export function escapeDraftIdOperands(
+  program: Command,
+  argv: readonly string[],
+): string[] {
+  const valueFlags = new Set<string>();
+  const collect = (command: Command) => {
+    for (const option of command.options) {
+      if (option.required || option.optional) {
+        for (const flag of [option.short, option.long]) {
+          if (flag) {
+            valueFlags.add(flag);
+          }
+        }
+      }
+    }
+    for (const subcommand of command.commands) {
+      collect(subcommand);
+    }
+  };
+  collect(program);
+
+  const terminator = argv.indexOf("--");
+  const scanned = terminator === -1 ? argv : argv.slice(0, terminator);
+  const passthrough = terminator === -1 ? [] : argv.slice(terminator + 1);
+  const kept: string[] = [];
+  const hoisted: string[] = [];
+  for (let index = 0; index < scanned.length; index += 1) {
+    const token = scanned[index]!;
+    if (valueFlags.has(token)) {
+      kept.push(token);
+      if (index + 1 < scanned.length) {
+        index += 1;
+        kept.push(scanned[index]!);
+      }
+      continue;
+    }
+    (DRAFT_ID_OPERAND.test(token) ? hoisted : kept).push(token);
+  }
+  if (hoisted.length === 0 && terminator === -1) {
+    return [...argv];
+  }
+  return [...kept, "--", ...hoisted, ...passthrough];
+}
+
 function requireDraftId(value: string): string {
   if (!draftIdSchema.safeParse(value).success) {
     throw new Error("The draft ID format is invalid.");
