@@ -24,6 +24,34 @@ const existingCategoryPrefix = "existing:";
 const newCategoryChoice = "new";
 const noCategoryChoice = "";
 
+type ResourcePolicy = "isolated" | "connected";
+
+// The API contract adds this field alongside the dashboard work. Keeping the
+// compatibility read here lets this commit remain isolated until both commits
+// are integrated on the feature branch.
+function resourcePolicyOf(
+  summary: DraftSummary | DraftVersionSummary,
+): ResourcePolicy {
+  return (summary as unknown as { resourcePolicy: ResourcePolicy })
+    .resourcePolicy;
+}
+
+function ResourcePolicyBadge({
+  copy,
+  policy,
+}: {
+  copy: LocaleDocument;
+  policy: ResourcePolicy;
+}) {
+  return (
+    <span className={`resource-policy-badge ${policy}`}>
+      {policy === "isolated"
+        ? copy.management.resourcePolicyIsolated
+        : copy.management.resourcePolicyConnected}
+    </span>
+  );
+}
+
 function categoryChoiceOf(category: string): string {
   return `${existingCategoryPrefix}${category}`;
 }
@@ -455,10 +483,16 @@ export function ManagementDashboard({
                       {draft.title ?? copy.management.untitled}
                     </a>
                   </h3>
-                  <span className={`state-badge ${draft.status}`}>
-                    {draft.status === "enabled"
-                      ? copy.management.enabled
-                      : copy.management.reportDisabled}
+                  <span className="draft-title-badges">
+                    <span className={`state-badge ${draft.status}`}>
+                      {draft.status === "enabled"
+                        ? copy.management.enabled
+                        : copy.management.reportDisabled}
+                    </span>
+                    <ResourcePolicyBadge
+                      copy={copy}
+                      policy={resourcePolicyOf(draft)}
+                    />
                   </span>
                 </div>
                 <p className="draft-meta">
@@ -664,8 +698,14 @@ export function ManagementDashboard({
                     target="_blank"
                     rel="noreferrer"
                   >
-                    <span>
-                      {copy.management.version} {version.versionNumber}
+                    <span className="version-identity">
+                      <span>
+                        {copy.management.version} {version.versionNumber}
+                      </span>
+                      <ResourcePolicyBadge
+                        copy={copy}
+                        policy={resourcePolicyOf(version)}
+                      />
                     </span>
                     <small>
                       {formatDate(version.createdAt)} ·{" "}

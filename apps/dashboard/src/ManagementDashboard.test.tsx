@@ -24,6 +24,7 @@ const draft = {
   id: "abcdefghijabcdefghijabcdefghijab",
   latestVersionNumber: 2,
   publicUrl: "https://share.example.test/d/abcdefghijabcdefghijabcdefghijab",
+  resourcePolicy: "isolated" as const,
   status: "enabled" as const,
   title: "Quarterly report",
   updatedAt: "2026-08-24T09:00:00.000Z",
@@ -312,6 +313,82 @@ describe("signed-in management dashboard", () => {
     expect(
       screen.getByRole("heading", { level: 3, name: draft.title }),
     ).toContainElement(titleLink);
+  });
+
+  it("labels the latest report and every saved version with its resource policy in Hebrew", async () => {
+    const connectedDraft = {
+      ...draft,
+      resourcePolicy: "connected" as const,
+    };
+    const savedVersions = [
+      {
+        byteLength: 8_192,
+        createdAt: "2026-08-24T09:00:00.000Z",
+        publicUrl: `${draft.publicUrl}/2`,
+        resourcePolicy: "connected" as const,
+        sha256: "a".repeat(64),
+        versionNumber: 2,
+      },
+      {
+        byteLength: 4_096,
+        createdAt: "2026-08-24T08:00:00.000Z",
+        publicUrl: `${draft.publicUrl}/1`,
+        resourcePolicy: "isolated" as const,
+        sha256: "b".repeat(64),
+        versionNumber: 1,
+      },
+    ];
+    const fetchImplementation = vi.fn<typeof fetch>(async (input) => {
+      const url = String(input);
+      if (url.startsWith("/dashboard/api/drafts?")) {
+        return json({
+          items: [connectedDraft],
+          limit: 100,
+          offset: 0,
+          total: 1,
+        });
+      }
+      if (
+        url === `/dashboard/api/drafts/${draft.id}/versions?limit=100&offset=0`
+      ) {
+        return json({
+          items: savedVersions,
+          limit: 100,
+          offset: 0,
+          total: savedVersions.length,
+        });
+      }
+      if (url === "/auth/api-keys") return json({ items: [] });
+      if (url === "/dashboard/api/categories") return json({ items: [] });
+      if (url === "/api/meta") return json(serviceMetadata);
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    renderDashboard(fetchImplementation, "reports", {
+      copy: localeDocuments.he,
+      locale: "he",
+    });
+
+    expect(
+      await screen.findByText(
+        localeDocuments.he.management.resourcePolicyConnected,
+      ),
+    ).toHaveClass("connected");
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: localeDocuments.he.management.showVersions,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getAllByText(
+          localeDocuments.he.management.resourcePolicyConnected,
+        ),
+      ).toHaveLength(2);
+    });
+    expect(
+      screen.getByText(localeDocuments.he.management.resourcePolicyIsolated),
+    ).toHaveClass("isolated");
   });
 
   it("extends a report's expiry with a preset TTL from now", async () => {
