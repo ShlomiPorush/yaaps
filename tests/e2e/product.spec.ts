@@ -353,7 +353,7 @@ test("presents the product and API documentation across locales and viewports", 
   await expect(
     page.locator('.docs-content a[href^="/downloads/"]'),
   ).toHaveCount(0);
-  await expect(page.locator(".endpoint-row")).toHaveCount(7);
+  await expect(page.locator(".endpoint-row")).toHaveCount(8);
   const openApi = await page.request.get("/openapi.json");
   expect(openApi.status()).toBe(200);
   expect(await openApi.json()).toMatchObject({
