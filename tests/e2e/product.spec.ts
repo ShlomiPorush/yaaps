@@ -8,6 +8,7 @@ import {
   expect,
   test,
   type BrowserContext,
+  type Locator,
   type Page,
   type Route,
 } from "@playwright/test";
@@ -44,7 +45,14 @@ const hebrew = JSON.parse(
     loading: string;
     summary: string;
   };
-  dashboard: { heading: string };
+  dashboard: {
+    heading: string;
+    statusHeading: string;
+    terminalLabel: string;
+    terminalPrompt: string;
+    terminalResponseLabel: string;
+    terminalResult: string;
+  };
   docs: { heading: string };
 };
 const english = JSON.parse(
@@ -53,7 +61,7 @@ const english = JSON.parse(
     "utf8",
   ),
 ) as {
-  actions: { switchLanguage: string };
+  actions: { switchLanguage: string; switchTheme: string };
   auth: {
     addPasskey: string;
     bootstrapHeading: string;
@@ -69,7 +77,14 @@ const english = JSON.parse(
     heading: string;
     methodNames: { macos: string; manual: string; windows: string };
   };
-  dashboard: { heading: string };
+  dashboard: {
+    heading: string;
+    statusHeading: string;
+    terminalLabel: string;
+    terminalPrompt: string;
+    terminalResponseLabel: string;
+    terminalResult: string;
+  };
   docs: { heading: string };
   management: {
     adminHeading: string;
@@ -87,10 +102,102 @@ const english = JSON.parse(
   navigation: {
     administration: string;
     connect: string;
+    dashboard: string;
     docs: string;
     settings: string;
   };
 };
+
+type LandingCopy = Pick<typeof english, "dashboard">;
+
+async function contrastRatio(locator: Locator): Promise<number> {
+  return locator.evaluate((element) => {
+    const parseRgb = (value: string) => {
+      const channels = value
+        .match(/[\d.]+/gu)
+        ?.slice(0, 3)
+        .map(Number);
+      if (!channels || channels.length !== 3) {
+        throw new Error(`Could not parse browser color: ${value}`);
+      }
+      return channels.map((channel) => {
+        const normalized = channel / 255;
+        return normalized <= 0.04045
+          ? normalized / 12.92
+          : ((normalized + 0.055) / 1.055) ** 2.4;
+      });
+    };
+    const style = getComputedStyle(element);
+    const foreground = parseRgb(style.color);
+    const background = parseRgb(style.backgroundColor);
+    const luminance = (channels: number[]) =>
+      0.2126 * channels[0]! + 0.7152 * channels[1]! + 0.0722 * channels[2]!;
+    const lighter = Math.max(luminance(foreground), luminance(background));
+    const darker = Math.min(luminance(foreground), luminance(background));
+    return (lighter + 0.05) / (darker + 0.05);
+  });
+}
+
+async function expectPublishingIllustration(
+  page: Page,
+  copy: LandingCopy,
+  theme: "dark" | "light",
+) {
+  const illustration = page.getByRole("region", {
+    name: copy.dashboard.statusHeading,
+  });
+  await expect(illustration).toBeVisible();
+  await expect(illustration.getByRole("listitem")).toHaveCount(3);
+  await expect(illustration).toContainText(copy.dashboard.terminalPrompt);
+  await expect(illustration.getByText(copy.dashboard.terminalResult)).toHaveCSS(
+    "direction",
+    "ltr",
+  );
+  await expect(illustration.getByText(copy.dashboard.terminalLabel)).toHaveCSS(
+    "direction",
+    documentDirection(copy),
+  );
+  await expect(
+    illustration.getByText(copy.dashboard.terminalResponseLabel, {
+      exact: true,
+    }),
+  ).toHaveCSS("direction", documentDirection(copy));
+  await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+  await expect(illustration).toHaveCSS(
+    "background-color",
+    theme === "light" ? "rgb(251, 248, 238)" : "rgb(0, 0, 0)",
+  );
+  expect(await contrastRatio(illustration)).toBeGreaterThanOrEqual(4.5);
+  expect(
+    await contrastRatio(illustration.locator(".publishing-response-bubble")),
+  ).toBeGreaterThanOrEqual(4.5);
+  await expect(illustration.locator("time")).toHaveJSProperty(
+    "dateTime",
+    await illustration.locator("time").getAttribute("datetime"),
+  );
+  expect(
+    await illustration.locator("time").evaluate((element) => {
+      const time = element as HTMLTimeElement;
+      const locale = document.documentElement.lang === "he" ? "he-IL" : "en-US";
+      return (
+        time.textContent?.trim() ===
+        new Intl.DateTimeFormat(locale, {
+          dateStyle: "medium",
+          timeStyle: "short",
+        }).format(new Date(time.dateTime))
+      );
+    }),
+  ).toBe(true);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+}
+
+function documentDirection(copy: LandingCopy): "ltr" | "rtl" {
+  return copy === hebrew ? "rtl" : "ltr";
+}
 
 async function addVirtualAuthenticator(context: BrowserContext, page: Page) {
   const session = await context.newCDPSession(page);
@@ -161,6 +268,38 @@ test("presents the product and API documentation across locales and viewports", 
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
+
+  await expectPublishingIllustration(page, english, "light");
+  const deadline = Date.parse(
+    (await page
+      .locator(".publishing-illustration time")
+      .getAttribute("datetime")) ?? "",
+  );
+  expect(deadline - Date.now()).toBeGreaterThan(24 * 60 * 60 * 1000 - 10_000);
+  expect(deadline - Date.now()).toBeLessThanOrEqual(24 * 60 * 60 * 1000);
+
+  await page.setViewportSize({ height: 844, width: 390 });
+  await expectPublishingIllustration(page, english, "light");
+  await page.getByRole("button", { name: english.actions.switchTheme }).click();
+  await expectPublishingIllustration(page, english, "dark");
+  await page.setViewportSize({ height: 900, width: 1280 });
+  await expectPublishingIllustration(page, english, "dark");
+
+  await page
+    .getByRole("button", { name: english.actions.switchLanguage })
+    .click();
+  await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
+  await expectPublishingIllustration(page, hebrew, "dark");
+  await page.setViewportSize({ height: 844, width: 390 });
+  await expectPublishingIllustration(page, hebrew, "dark");
+  await page.getByRole("button", { name: hebrew.actions.switchTheme }).click();
+  await expectPublishingIllustration(page, hebrew, "light");
+  await page.setViewportSize({ height: 900, width: 1280 });
+  await expectPublishingIllustration(page, hebrew, "light");
+  await page
+    .getByRole("button", { name: hebrew.actions.switchLanguage })
+    .click();
+  await expect(page.locator("html")).toHaveAttribute("dir", "ltr");
 
   await connectionLink.click();
   await expect(page).toHaveURL(/\/connect$/u);
@@ -252,15 +391,15 @@ test("presents the product and API documentation across locales and viewports", 
   await expect(
     page.getByRole("heading", { name: hebrew.dashboard.heading }),
   ).toBeVisible();
-  await expect(page.locator(".terminal-strip small")).toHaveCSS(
+  await expect(page.locator(".publishing-message-user small")).toHaveCSS(
     "direction",
     "rtl",
   );
-  await expect(page.locator(".terminal-strip code").first()).toHaveCSS(
+  await expect(page.locator(".publishing-request")).toHaveCSS(
     "direction",
     "rtl",
   );
-  await expect(page.locator(".terminal-strip-result bdi")).toHaveCSS(
+  await expect(page.locator(".publishing-share-link")).toHaveCSS(
     "direction",
     "ltr",
   );

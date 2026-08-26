@@ -11,7 +11,7 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { App, safeDashboardReturnTarget } from "./App.js";
-import { localeDocuments } from "./localization.js";
+import { formatDate, localeDocuments } from "./localization.js";
 
 afterEach(() => {
   cleanup();
@@ -143,12 +143,27 @@ describe("dashboard foundation", () => {
     expect(
       screen.getByText(localeDocuments.en.dashboard.unavailable),
     ).toBeVisible();
+    const publishingIllustration = screen.getByRole("region", {
+      name: localeDocuments.en.dashboard.statusHeading,
+    });
+    expect(publishingIllustration).toHaveTextContent(
+      localeDocuments.en.dashboard.terminalPrompt,
+    );
     expect(
-      screen.getByText(localeDocuments.en.dashboard.terminalPrompt),
-    ).toBeVisible();
+      within(publishingIllustration).getAllByRole("listitem"),
+    ).toHaveLength(3);
     expect(
-      screen.getByText(localeDocuments.en.dashboard.statusItems[0]!),
-    ).toBeVisible();
+      within(publishingIllustration).getByText(
+        localeDocuments.en.dashboard.terminalResult,
+      ),
+    ).toHaveAttribute("dir", "ltr");
+    expect(publishingIllustration.querySelector("svg")).toHaveAttribute(
+      "aria-hidden",
+      "true",
+    );
+    expect(
+      publishingIllustration.querySelector(".publishing-processing-dots"),
+    ).toHaveAttribute("aria-hidden", "true");
     expect(screen.queryByText(/yaaps publish/u)).not.toBeInTheDocument();
     expect(
       screen.queryByRole("heading", {
@@ -182,8 +197,10 @@ describe("dashboard foundation", () => {
       screen.getByText(localeDocuments.he.dashboard.heading),
     ).toBeVisible();
     expect(
-      screen.getByText(localeDocuments.he.dashboard.terminalPrompt),
-    ).toBeVisible();
+      screen.getByRole("region", {
+        name: localeDocuments.he.dashboard.statusHeading,
+      }),
+    ).toHaveTextContent(localeDocuments.he.dashboard.terminalPrompt);
     expect(document.documentElement).toHaveAttribute("lang", "he");
     expect(document.documentElement).toHaveAttribute("dir", "rtl");
   });
@@ -193,11 +210,16 @@ describe("dashboard foundation", () => {
 
     const datelineIssue =
       document.querySelector<HTMLElement>(".dateline-issue");
-    const terminal = document.querySelector<HTMLElement>(".terminal-strip");
-    const terminalLines = terminal?.querySelectorAll<HTMLElement>("code");
-    const promptLine = terminalLines?.item(0);
-    const resultLine = terminalLines?.item(1);
-    if (!datelineIssue || !terminal || !promptLine || !resultLine) {
+    const illustration = screen.getByRole("region", {
+      name: localeDocuments.he.dashboard.statusHeading,
+    });
+    const promptLine = illustration.querySelector<HTMLElement>(
+      ".publishing-request",
+    );
+    const resultLine = illustration.querySelector<HTMLElement>(
+      ".publishing-response-bubble",
+    );
+    if (!datelineIssue || !promptLine || !resultLine) {
       throw new Error("The landing direction surfaces did not render.");
     }
 
@@ -208,9 +230,9 @@ describe("dashboard foundation", () => {
       "dir",
       "ltr",
     );
-    expect(terminal).not.toHaveAttribute("dir");
+    expect(illustration).not.toHaveAttribute("dir");
     expect(
-      within(terminal)
+      within(illustration)
         .getByText(localeDocuments.he.dashboard.terminalLabel)
         .closest('[dir="ltr"]'),
     ).toBeNull();
@@ -218,15 +240,43 @@ describe("dashboard foundation", () => {
       localeDocuments.he.dashboard.terminalPrompt,
     );
     expect(promptLine.closest('[dir="ltr"]')).toBeNull();
-    expect(promptLine.querySelector("bdi")).toHaveAttribute("dir", "ltr");
+    expect(within(promptLine).getByText("$yaaps")).toHaveAttribute(
+      "dir",
+      "ltr",
+    );
     expect(
-      within(resultLine)
+      within(illustration)
         .getByText(localeDocuments.he.dashboard.terminalResponseLabel)
         .closest('[dir="ltr"]'),
     ).toBeNull();
     expect(
       within(resultLine).getByText(localeDocuments.he.dashboard.terminalResult),
     ).toHaveAttribute("dir", "ltr");
+  });
+
+  it("shows a localized deadline exactly 24 hours after the illustration mounts", () => {
+    const mountedAt = new Date("2026-08-26T12:34:00.000Z");
+    vi.spyOn(Date, "now").mockReturnValue(mountedAt.getTime());
+    render(<App initialLocale="en" initialTheme="light" />);
+
+    const expectedDeadline = new Date(
+      mountedAt.getTime() + 24 * 60 * 60 * 1000,
+    );
+    const time = screen.getByText(
+      formatDate("en", expectedDeadline.toISOString()),
+    );
+    expect(time.tagName).toBe("TIME");
+    expect(time).toHaveAttribute("datetime", expectedDeadline.toISOString());
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: localeDocuments.en.actions.switchLanguage,
+      }),
+    );
+    expect(time).toHaveTextContent(
+      formatDate("he", expectedDeadline.toISOString()),
+    );
+    expect(time).toHaveAttribute("datetime", expectedDeadline.toISOString());
   });
 
   it("keeps the recovery-code input LTR within Hebrew login", async () => {
