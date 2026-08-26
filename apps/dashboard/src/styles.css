@@ -1375,6 +1375,88 @@ footer a {
   line-height: 1.4;
 }
 
+/* A category is free text in either script, so the chip keeps its own bidi
+   context instead of reordering the line around it. */
+.category-chip {
+  display: inline-block;
+  max-width: 100%;
+  padding: 2px 7px;
+  border: 1px solid var(--hairline);
+  background: color-mix(in srgb, var(--acid) 24%, var(--card));
+  color: var(--ink);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+  unicode-bidi: isolate;
+  vertical-align: baseline;
+}
+
+.category-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.category-filter-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 100%;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--hairline);
+  background: var(--card);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-align: start;
+}
+
+.category-filter-option[aria-pressed="true"] {
+  border-color: var(--ink);
+  background: var(--acid);
+  color: #141414;
+}
+
+.category-filter-option:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.category-filter-option .category-name {
+  overflow-wrap: anywhere;
+  unicode-bidi: isolate;
+}
+
+.category-filter-count {
+  flex: none;
+  padding: 1px 6px;
+  border: 1px solid color-mix(in srgb, currentcolor 35%, transparent);
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.category-form {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.category-form input {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--ink);
+  background: var(--background);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.82rem;
+}
+
 .public-link {
   flex: none;
   display: inline-flex;
@@ -2415,6 +2497,16 @@ footer a {
   .key-item {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .category-form {
+    align-items: stretch;
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .category-filter-option {
+    justify-content: space-between;
   }
 
   .public-link {

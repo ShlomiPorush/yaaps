@@ -1,5 +1,6 @@
 import type {
   ApiKeySummary,
+  CategorySummary,
   DraftSummary,
   DraftVersionSummary,
   PublicServiceMetadata,
@@ -50,6 +51,11 @@ export function ManagementDashboard({
   );
   const [drafts, setDrafts] = useState<DraftSummary[]>([]);
   const [draftsTotal, setDraftsTotal] = useState(0);
+  const [listedTotal, setListedTotal] = useState(0);
+  const [categories, setCategories] = useState<CategorySummary[]>([]);
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+  const [editingCategory, setEditingCategory] = useState<string | null>(null);
+  const [categoryValue, setCategoryValue] = useState("");
   const [apiKeys, setApiKeys] = useState<ApiKeySummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [requestBusy, setRequestBusy] = useState(false);
@@ -93,14 +99,18 @@ export function ManagementDashboard({
               }
             })
             .catch(() => undefined);
-          const [draftResponse, keyResponse] = await Promise.all([
-            api.listDrafts(),
-            api.listApiKeys(),
-          ]);
+          const [draftResponse, keyResponse, categoryResponse] =
+            await Promise.all([
+              api.listDrafts(),
+              api.listApiKeys(),
+              api.listCategories(),
+            ]);
           if (active) {
             setDrafts(draftResponse.items);
             setDraftsTotal(draftResponse.total);
+            setListedTotal(draftResponse.total);
             setApiKeys(keyResponse.items);
+            setCategories(categoryResponse.items);
             setRequestError(false);
           }
         } else {
@@ -147,15 +157,74 @@ export function ManagementDashboard({
     }
   }
 
+  function replaceDraft(updated: DraftSummary) {
+    setDrafts((current) =>
+      current.map((item) => (item.id === updated.id ? updated : item)),
+    );
+  }
+
+  async function loadDrafts(category: string | null) {
+    const response = await api.listDrafts(category ?? undefined);
+    setDrafts(response.items);
+    setListedTotal(response.total);
+    if (category === null) {
+      setDraftsTotal(response.total);
+    }
+  }
+
+  // The set of categories is derived from the live drafts, so every mutation
+  // that can add or remove the last draft of a category reloads it. Reports
+  // true when the active filter lost its last draft and was dropped.
+  async function reloadCategories(): Promise<boolean> {
+    const response = await api.listCategories();
+    setCategories(response.items);
+    if (
+      categoryFilter === null ||
+      response.items.some((item) => item.category === categoryFilter)
+    ) {
+      return false;
+    }
+    setCategoryFilter(null);
+    return true;
+  }
+
   async function toggleDraft(draft: DraftSummary) {
     await withRequest(async () => {
-      const updated = await api.updateDraft(draft.id, {
-        status: draft.status === "enabled" ? "disabled" : "enabled",
-      });
-      setDrafts((current) =>
-        current.map((item) => (item.id === updated.id ? updated : item)),
+      replaceDraft(
+        await api.updateDraft(draft.id, {
+          status: draft.status === "enabled" ? "disabled" : "enabled",
+        }),
       );
     });
+  }
+
+  async function selectCategory(category: string | null) {
+    if (category === categoryFilter) {
+      return;
+    }
+    setCategoryFilter(category);
+    await withRequest(() => loadDrafts(category));
+  }
+
+  async function applyCategory(draftId: string, category: string | null) {
+    await withRequest(async () => {
+      replaceDraft(await api.updateDraft(draftId, { category }));
+      setEditingCategory(null);
+      const filterDropped = await reloadCategories();
+      // A filtered list can no longer hold a draft that moved to another
+      // category, so the server decides again which reports belong here.
+      if (categoryFilter !== null) {
+        await loadDrafts(filterDropped ? null : categoryFilter);
+      }
+    });
+  }
+
+  async function saveCategory(
+    event: FormEvent<HTMLFormElement>,
+    draftId: string,
+  ) {
+    event.preventDefault();
+    await applyCategory(draftId, categoryValue.trim());
   }
 
   const extendChoices = [
@@ -171,10 +240,7 @@ export function ManagementDashboard({
 
   async function extendDraft(draftId: string, ttlSeconds: number) {
     await withRequest(async () => {
-      const updated = await api.updateDraft(draftId, { ttlSeconds });
-      setDrafts((current) =>
-        current.map((item) => (item.id === updated.id ? updated : item)),
-      );
+      replaceDraft(await api.updateDraft(draftId, { ttlSeconds }));
       setExtendingDraft(null);
     });
   }
@@ -201,8 +267,12 @@ export function ManagementDashboard({
       await api.deleteDraft(draftId);
       setDrafts((current) => current.filter((draft) => draft.id !== draftId));
       setDraftsTotal((current) => Math.max(0, current - 1));
+      setListedTotal((current) => Math.max(0, current - 1));
       setConfirmDelete(null);
       setExpandedDraft((current) => (current === draftId ? null : current));
+      if (await reloadCategories()) {
+        await loadDrafts(null);
+      }
     });
   }
 
@@ -276,12 +346,66 @@ export function ManagementDashboard({
         )}
       </div>
 
-      {!loading && drafts.length === 0 && (
+      {categories.length > 0 && (
+        <div
+          className="category-filter"
+          role="group"
+          aria-label={copy.management.categoryFilterLabel}
+        >
+          <button
+            aria-pressed={categoryFilter === null}
+            className="category-filter-option"
+            disabled={requestBusy}
+            type="button"
+            onClick={() => void selectCategory(null)}
+          >
+            {copy.management.categoryFilterAll}
+          </button>
+          {categories.map((item) => (
+            <button
+              aria-label={copy.management.categoryFilterOption
+                .replace("{category}", item.category)
+                .replace("{count}", String(item.draftCount))}
+              aria-pressed={categoryFilter === item.category}
+              className="category-filter-option"
+              disabled={requestBusy}
+              key={item.category}
+              type="button"
+              onClick={() => void selectCategory(item.category)}
+            >
+              <span className="category-name">{item.category}</span>
+              <span className="category-filter-count" aria-hidden="true">
+                {item.draftCount}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {!loading && drafts.length === 0 && categoryFilter === null && (
         <div className="empty-state">
           <strong>{copy.management.emptyReportsHeading}</strong>
           <p>{copy.management.emptyReportsText}</p>
         </div>
       )}
+
+      {!loading && drafts.length === 0 && categoryFilter !== null && (
+        <div className="empty-state">
+          <strong>{copy.management.emptyCategoryHeading}</strong>
+          <p>
+            {copy.management.emptyCategoryText.replace(
+              "{category}",
+              categoryFilter,
+            )}
+          </p>
+        </div>
+      )}
+
+      <datalist id="draft-category-options">
+        {categories.map((item) => (
+          <option key={item.category} value={item.category} />
+        ))}
+      </datalist>
 
       <div className="draft-list">
         {drafts.map((draft) => (
@@ -301,6 +425,12 @@ export function ManagementDashboard({
                   </span>
                 </div>
                 <p className="draft-meta">
+                  {draft.category !== null && (
+                    <>
+                      <span className="category-chip">{draft.category}</span>
+                      <span aria-hidden="true"> · </span>
+                    </>
+                  )}
                   {copy.management.version} {draft.latestVersionNumber}
                   <span aria-hidden="true"> · </span>
                   {copy.management.expires} {formatExpiry(draft.expiresAt)}
@@ -337,6 +467,63 @@ export function ManagementDashboard({
                   ? copy.management.disable
                   : copy.management.enable}
               </button>
+              {editingCategory === draft.id ? (
+                <form
+                  className="category-form"
+                  onSubmit={(event) => void saveCategory(event, draft.id)}
+                >
+                  <input
+                    autoFocus
+                    required
+                    aria-label={copy.management.categoryLabel}
+                    list="draft-category-options"
+                    maxLength={100}
+                    placeholder={copy.management.categoryPlaceholder}
+                    value={categoryValue}
+                    onChange={(event) => setCategoryValue(event.target.value)}
+                  />
+                  <button
+                    className="text-button"
+                    disabled={requestBusy}
+                    type="submit"
+                  >
+                    {copy.management.categorySave}
+                  </button>
+                  <button
+                    className="text-button"
+                    type="button"
+                    onClick={() => setEditingCategory(null)}
+                  >
+                    {copy.management.cancel}
+                  </button>
+                </form>
+              ) : (
+                <>
+                  <button
+                    className="text-button"
+                    disabled={requestBusy}
+                    type="button"
+                    onClick={() => {
+                      setEditingCategory(draft.id);
+                      setCategoryValue(draft.category ?? "");
+                    }}
+                  >
+                    {draft.category === null
+                      ? copy.management.categorySet
+                      : copy.management.categoryEdit}
+                  </button>
+                  {draft.category !== null && (
+                    <button
+                      className="text-button"
+                      disabled={requestBusy}
+                      type="button"
+                      onClick={() => void applyCategory(draft.id, null)}
+                    >
+                      {copy.management.categoryClear}
+                    </button>
+                  )}
+                </>
+              )}
               {extendingDraft === draft.id ? (
                 <span className="confirm-actions">
                   {extendChoices.map((choice) => (
@@ -735,11 +922,11 @@ export function ManagementDashboard({
           {copy.auth.error}
         </p>
       )}
-      {draftsTotal > drafts.length && (
+      {listedTotal > drafts.length && (
         <p className="quiet-status">
           {copy.management.showingLimited
             .replace("{shown}", String(drafts.length))
-            .replace("{total}", String(draftsTotal))}
+            .replace("{total}", String(listedTotal))}
         </p>
       )}
       {recoveryCodes.length > 0 && (

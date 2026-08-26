@@ -288,6 +288,12 @@ export function AdministrationPanel({
               <div>
                 <strong>{draft.title ?? copy.management.untitled}</strong>
                 <small>
+                  {draft.category !== null && (
+                    <>
+                      <span className="category-chip">{draft.category}</span>
+                      <span aria-hidden="true"> · </span>
+                    </>
+                  )}
                   {copy.management.owner} {draft.ownerDisplayName}
                   <span aria-hidden="true"> · </span>
                   {copy.management.version} {draft.latestVersionNumber}

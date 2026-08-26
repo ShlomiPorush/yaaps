@@ -18,6 +18,7 @@ import {
 import { ManagementDashboard } from "./ManagementDashboard.js";
 
 const draft = {
+  category: null,
   createdAt: "2026-08-24T08:00:00.000Z",
   expiresAt: "2026-08-31T08:00:00.000Z",
   id: "abcdefghijabcdefghijabcdefghijab",
@@ -27,6 +28,24 @@ const draft = {
   title: "Quarterly report",
   updatedAt: "2026-08-24T09:00:00.000Z",
 };
+
+const weeklyCategory = "Weekly reports";
+
+const categorizedDraft = {
+  ...draft,
+  category: weeklyCategory,
+  id: "bcdefghijbcdefghijbcdefghijbcdef",
+  publicUrl: "https://share.example.test/d/bcdefghijbcdefghijbcdefghijbcdef",
+  title: "Weekly summary",
+};
+
+const draftListUrl = "/dashboard/api/drafts?limit=100&offset=0";
+
+function filterOptionName(category: string, count: number): string {
+  return localeDocuments.en.management.categoryFilterOption
+    .replace("{category}", category)
+    .replace("{count}", String(count));
+}
 
 const serviceMetadata = {
   limits: {
@@ -132,6 +151,9 @@ describe("signed-in management dashboard", () => {
           resolveKeys = resolve;
         });
       }
+      if (url === "/dashboard/api/categories") {
+        return Promise.resolve(json({ items: [] }));
+      }
       if (url === "/api/meta") {
         return Promise.resolve(json(serviceMetadata));
       }
@@ -146,7 +168,7 @@ describe("signed-in management dashboard", () => {
     expect(
       screen.queryByLabelText(localeDocuments.en.management.summary),
     ).not.toBeInTheDocument();
-    await waitFor(() => expect(fetchImplementation).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(fetchImplementation).toHaveBeenCalledTimes(4));
 
     resolveDrafts(json({ items: [], limit: 100, offset: 0, total: 0 }));
     resolveKeys(json({ items: [] }));
@@ -180,6 +202,9 @@ describe("signed-in management dashboard", () => {
           rejectKeys = reject;
         });
       }
+      if (url === "/dashboard/api/categories") {
+        return Promise.resolve(json({ items: [] }));
+      }
       if (url === "/api/meta") {
         return Promise.resolve(json(serviceMetadata));
       }
@@ -191,7 +216,7 @@ describe("signed-in management dashboard", () => {
     expect(
       screen.queryByLabelText(localeDocuments.en.management.summary),
     ).not.toBeInTheDocument();
-    await waitFor(() => expect(fetchImplementation).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(fetchImplementation).toHaveBeenCalledTimes(4));
     rejectDrafts(new Error("Draft request failed"));
     rejectKeys(new Error("Key request failed"));
 
@@ -228,6 +253,9 @@ describe("signed-in management dashboard", () => {
             },
           ],
         });
+      }
+      if (url === "/dashboard/api/categories") {
+        return json({ items: [] });
       }
       if (url.endsWith(draft.id) && init?.method === "PATCH") {
         return json({ ...draft, status: "disabled" });
@@ -269,6 +297,7 @@ describe("signed-in management dashboard", () => {
         return json({ items: [draft], limit: 100, offset: 0, total: 1 });
       }
       if (url === "/auth/api-keys") return json({ items: [] });
+      if (url === "/dashboard/api/categories") return json({ items: [] });
       throw new Error(`Unexpected request: ${url}`);
     });
     renderDashboard(fetchImplementation, "reports");
@@ -296,6 +325,7 @@ describe("signed-in management dashboard", () => {
         return json({ items: [draft], limit: 100, offset: 0, total: 1 });
       }
       if (url === "/auth/api-keys") return json({ items: [] });
+      if (url === "/dashboard/api/categories") return json({ items: [] });
       if (url === "/api/meta") return json(serviceMetadata);
       if (url.endsWith(draft.id) && init?.method === "PATCH") {
         return json({ ...draft, expiresAt: extendedExpiry });
@@ -346,6 +376,7 @@ describe("signed-in management dashboard", () => {
         return json({ items: [draft], limit: 100, offset: 0, total: 1 });
       }
       if (url === "/auth/api-keys") return json({ items: [] });
+      if (url === "/dashboard/api/categories") return json({ items: [] });
       if (url.endsWith(draft.id) && init?.method === "DELETE") {
         return new Response(null, { status: 204 });
       }
@@ -509,6 +540,293 @@ describe("signed-in management dashboard", () => {
     );
   });
 
+  it("labels a categorized report with its category chip", async () => {
+    const fetchImplementation = vi.fn<typeof fetch>(async (input) => {
+      const url = String(input);
+      if (url.startsWith("/dashboard/api/drafts?")) {
+        return json({
+          items: [categorizedDraft, draft],
+          limit: 100,
+          offset: 0,
+          total: 2,
+        });
+      }
+      if (url === "/auth/api-keys") return json({ items: [] });
+      if (url === "/dashboard/api/categories") {
+        return json({ items: [{ category: weeklyCategory, draftCount: 1 }] });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    const { container } = renderDashboard(fetchImplementation, "reports");
+
+    await screen.findByText(categorizedDraft.title);
+    const chips = container.querySelectorAll(".category-chip");
+    expect(chips).toHaveLength(1);
+    expect(chips[0]).toHaveTextContent(weeklyCategory);
+    expect(chips[0]?.closest(".draft-meta")).toBeInTheDocument();
+    expect(
+      screen.getByRole("group", {
+        name: localeDocuments.en.management.categoryFilterLabel,
+      }),
+    ).toBeVisible();
+  });
+
+  it("asks the server for one category and back for every report", async () => {
+    const fetchImplementation = vi.fn<typeof fetch>(async (input) => {
+      const url = String(input);
+      if (url === `${draftListUrl}&category=Weekly%20reports`) {
+        return json({
+          items: [categorizedDraft],
+          limit: 100,
+          offset: 0,
+          total: 1,
+        });
+      }
+      if (url === draftListUrl) {
+        return json({
+          items: [categorizedDraft, draft],
+          limit: 100,
+          offset: 0,
+          total: 2,
+        });
+      }
+      if (url === "/auth/api-keys") return json({ items: [] });
+      if (url === "/dashboard/api/categories") {
+        return json({ items: [{ category: weeklyCategory, draftCount: 1 }] });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    renderDashboard(fetchImplementation, "reports");
+
+    const filterOption = await screen.findByRole("button", {
+      name: filterOptionName(weeklyCategory, 1),
+    });
+    expect(filterOption).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(filterOption);
+
+    await waitFor(() =>
+      expect(screen.queryByText(draft.title)).not.toBeInTheDocument(),
+    );
+    expect(fetchImplementation).toHaveBeenCalledWith(
+      `${draftListUrl}&category=Weekly%20reports`,
+      expect.objectContaining({ credentials: "same-origin" }),
+    );
+    expect(
+      screen.getByRole("button", { name: filterOptionName(weeklyCategory, 1) }),
+    ).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: localeDocuments.en.management.categoryFilterAll,
+      }),
+    );
+
+    await screen.findByText(draft.title);
+    expect(
+      screen.getByRole("button", {
+        name: localeDocuments.en.management.categoryFilterAll,
+      }),
+    ).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("names the filtered category when no report matches it", async () => {
+    const fetchImplementation = vi.fn<typeof fetch>(async (input) => {
+      const url = String(input);
+      if (url === `${draftListUrl}&category=Weekly%20reports`) {
+        return json({ items: [], limit: 100, offset: 0, total: 0 });
+      }
+      if (url === draftListUrl) {
+        return json({ items: [draft], limit: 100, offset: 0, total: 1 });
+      }
+      if (url === "/auth/api-keys") return json({ items: [] });
+      if (url === "/dashboard/api/categories") {
+        return json({ items: [{ category: weeklyCategory, draftCount: 1 }] });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    renderDashboard(fetchImplementation, "reports");
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: filterOptionName(weeklyCategory, 1),
+      }),
+    );
+
+    expect(
+      await screen.findByText(
+        localeDocuments.en.management.emptyCategoryHeading,
+      ),
+    ).toBeVisible();
+    expect(
+      screen.getByText(
+        localeDocuments.en.management.emptyCategoryText.replace(
+          "{category}",
+          weeklyCategory,
+        ),
+      ),
+    ).toBeVisible();
+    expect(
+      screen.queryByText(localeDocuments.en.management.emptyReportsHeading),
+    ).not.toBeInTheDocument();
+  });
+
+  it("adds a category to a report and offers it as a filter", async () => {
+    document.cookie = "yaaps_csrf=csrf-token; Path=/";
+    let categorized = false;
+    const fetchImplementation = vi.fn<typeof fetch>(async (input, init) => {
+      const url = String(input);
+      if (url.startsWith("/dashboard/api/drafts?")) {
+        return json({
+          items: [categorized ? { ...draft, category: weeklyCategory } : draft],
+          limit: 100,
+          offset: 0,
+          total: 1,
+        });
+      }
+      if (url === "/auth/api-keys") return json({ items: [] });
+      if (url === "/dashboard/api/categories") {
+        return json({
+          items: categorized
+            ? [{ category: weeklyCategory, draftCount: 1 }]
+            : [],
+        });
+      }
+      if (url.endsWith(draft.id) && init?.method === "PATCH") {
+        categorized = true;
+        return json({ ...draft, category: weeklyCategory });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    renderDashboard(fetchImplementation, "reports");
+
+    await screen.findByText(draft.title);
+    expect(
+      screen.queryByRole("group", {
+        name: localeDocuments.en.management.categoryFilterLabel,
+      }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: localeDocuments.en.management.categorySet,
+      }),
+    );
+    fireEvent.change(
+      screen.getByLabelText(localeDocuments.en.management.categoryLabel),
+      { target: { value: ` ${weeklyCategory} ` } },
+    );
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: localeDocuments.en.management.categorySave,
+      }),
+    );
+
+    expect(
+      await screen.findByRole("button", {
+        name: filterOptionName(weeklyCategory, 1),
+      }),
+    ).toBeVisible();
+    expect(fetchImplementation).toHaveBeenCalledWith(
+      `/dashboard/api/drafts/${draft.id}`,
+      expect.objectContaining({
+        body: JSON.stringify({ category: weeklyCategory }),
+        headers: expect.objectContaining({ "x-csrf-token": "csrf-token" }),
+        method: "PATCH",
+      }),
+    );
+    expect(
+      screen.getByRole("button", {
+        name: localeDocuments.en.management.categoryEdit,
+      }),
+    ).toBeVisible();
+  });
+
+  it("changes and then removes the category of a report", async () => {
+    document.cookie = "yaaps_csrf=csrf-token; Path=/";
+    const monthlyCategory = "Monthly reports";
+    let current: string | null = weeklyCategory;
+    const fetchImplementation = vi.fn<typeof fetch>(async (input, init) => {
+      const url = String(input);
+      if (url.startsWith("/dashboard/api/drafts?")) {
+        return json({
+          items: [{ ...categorizedDraft, category: current }],
+          limit: 100,
+          offset: 0,
+          total: 1,
+        });
+      }
+      if (url === "/auth/api-keys") return json({ items: [] });
+      if (url === "/dashboard/api/categories") {
+        return json({
+          items: current === null ? [] : [{ category: current, draftCount: 1 }],
+        });
+      }
+      if (url.endsWith(categorizedDraft.id) && init?.method === "PATCH") {
+        current = (JSON.parse(String(init.body)) as { category: string | null })
+          .category;
+        return json({ ...categorizedDraft, category: current });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    const { container } = renderDashboard(fetchImplementation, "reports");
+
+    await screen.findByText(categorizedDraft.title);
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: localeDocuments.en.management.categoryEdit,
+      }),
+    );
+    const input = screen.getByLabelText(
+      localeDocuments.en.management.categoryLabel,
+    );
+    expect(input).toHaveValue(weeklyCategory);
+    fireEvent.change(input, { target: { value: monthlyCategory } });
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: localeDocuments.en.management.categorySave,
+      }),
+    );
+
+    expect(
+      await screen.findByRole("button", {
+        name: filterOptionName(monthlyCategory, 1),
+      }),
+    ).toBeVisible();
+    expect(fetchImplementation).toHaveBeenCalledWith(
+      `/dashboard/api/drafts/${categorizedDraft.id}`,
+      expect.objectContaining({
+        body: JSON.stringify({ category: monthlyCategory }),
+        method: "PATCH",
+      }),
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: localeDocuments.en.management.categoryClear,
+      }),
+    );
+
+    await waitFor(() =>
+      expect(container.querySelector(".category-chip")).toBeNull(),
+    );
+    expect(fetchImplementation).toHaveBeenCalledWith(
+      `/dashboard/api/drafts/${categorizedDraft.id}`,
+      expect.objectContaining({
+        body: JSON.stringify({ category: null }),
+        method: "PATCH",
+      }),
+    );
+    expect(
+      screen.queryByRole("group", {
+        name: localeDocuments.en.management.categoryFilterLabel,
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: localeDocuments.en.management.categorySet,
+      }),
+    ).toBeVisible();
+  });
+
   it("isolates displayed recovery codes from Hebrew page direction", async () => {
     const recoveryCode = "yar_save-this_once";
     const fetchImplementation = vi.fn<typeof fetch>(async (input) => {
@@ -517,6 +835,7 @@ describe("signed-in management dashboard", () => {
         return json({ items: [], limit: 100, offset: 0, total: 0 });
       }
       if (url === "/auth/api-keys") return json({ items: [] });
+      if (url === "/dashboard/api/categories") return json({ items: [] });
       throw new Error(`Unexpected request: ${url}`);
     });
 
