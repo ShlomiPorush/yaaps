@@ -1,6 +1,6 @@
 {
   "name": "yaaps-ai",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Command-line client for YAAPS (yaaps.net): publish agent-made HTML reports as temporary shareable links.",
   "license": "MIT",
   "type": "module",
