@@ -18,6 +18,25 @@ import {
   type LocaleDocument,
 } from "./localization.js";
 
+// The category select carries existing categories behind a prefix so that no
+// category name can ever collide with the placeholder or the new-category row.
+const existingCategoryPrefix = "existing:";
+const newCategoryChoice = "new";
+const noCategoryChoice = "";
+
+function categoryChoiceOf(category: string): string {
+  return `${existingCategoryPrefix}${category}`;
+}
+
+function categoryOfChoice(choice: string, typedName: string): string {
+  if (choice === newCategoryChoice) {
+    return typedName.trim();
+  }
+  return choice.startsWith(existingCategoryPrefix)
+    ? choice.slice(existingCategoryPrefix.length)
+    : "";
+}
+
 interface ManagementDashboardProps {
   actionError: boolean;
   busy: boolean;
@@ -55,6 +74,7 @@ export function ManagementDashboard({
   const [categories, setCategories] = useState<CategorySummary[]>([]);
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [editingCategory, setEditingCategory] = useState<string | null>(null);
+  const [categoryChoice, setCategoryChoice] = useState(noCategoryChoice);
   const [categoryValue, setCategoryValue] = useState("");
   const [apiKeys, setApiKeys] = useState<ApiKeySummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -219,12 +239,35 @@ export function ManagementDashboard({
     });
   }
 
+  function startCategoryEdit(draft: DraftSummary) {
+    const current = draft.category;
+    const listed = categories.some((item) => item.category === current);
+    setEditingCategory(draft.id);
+    if (current !== null && listed) {
+      setCategoryChoice(categoryChoiceOf(current));
+      setCategoryValue("");
+      return;
+    }
+    // Nothing to pick from, or a category the list does not know yet, opens
+    // the editor straight on the text input.
+    setCategoryChoice(
+      current === null && categories.length > 0
+        ? noCategoryChoice
+        : newCategoryChoice,
+    );
+    setCategoryValue(current ?? "");
+  }
+
   async function saveCategory(
     event: FormEvent<HTMLFormElement>,
     draftId: string,
   ) {
     event.preventDefault();
-    await applyCategory(draftId, categoryValue.trim());
+    const category = categoryOfChoice(categoryChoice, categoryValue);
+    if (category === "") {
+      return;
+    }
+    await applyCategory(draftId, category);
   }
 
   const extendChoices = [
@@ -401,12 +444,6 @@ export function ManagementDashboard({
         </div>
       )}
 
-      <datalist id="draft-category-options">
-        {categories.map((item) => (
-          <option key={item.category} value={item.category} />
-        ))}
-      </datalist>
-
       <div className="draft-list">
         {drafts.map((draft) => (
           <article className="draft-item" key={draft.id}>
@@ -472,19 +509,49 @@ export function ManagementDashboard({
                   className="category-form"
                   onSubmit={(event) => void saveCategory(event, draft.id)}
                 >
-                  <input
-                    autoFocus
-                    required
-                    aria-label={copy.management.categoryLabel}
-                    list="draft-category-options"
-                    maxLength={100}
-                    placeholder={copy.management.categoryPlaceholder}
-                    value={categoryValue}
-                    onChange={(event) => setCategoryValue(event.target.value)}
-                  />
+                  {categories.length > 0 && (
+                    <select
+                      aria-label={copy.management.categoryLabel}
+                      value={categoryChoice}
+                      onChange={(event) =>
+                        setCategoryChoice(event.target.value)
+                      }
+                    >
+                      {categoryChoice === noCategoryChoice && (
+                        <option disabled value={noCategoryChoice}>
+                          {copy.management.categoryChoose}
+                        </option>
+                      )}
+                      {categories.map((item) => (
+                        <option
+                          key={item.category}
+                          value={categoryChoiceOf(item.category)}
+                        >
+                          {item.category}
+                        </option>
+                      ))}
+                      <option value={newCategoryChoice}>
+                        {copy.management.categoryNew}
+                      </option>
+                    </select>
+                  )}
+                  {categoryChoice === newCategoryChoice && (
+                    <input
+                      autoFocus
+                      required
+                      aria-label={copy.management.categoryNewLabel}
+                      maxLength={100}
+                      placeholder={copy.management.categoryPlaceholder}
+                      value={categoryValue}
+                      onChange={(event) => setCategoryValue(event.target.value)}
+                    />
+                  )}
                   <button
                     className="text-button"
-                    disabled={requestBusy}
+                    disabled={
+                      requestBusy ||
+                      categoryOfChoice(categoryChoice, categoryValue) === ""
+                    }
                     type="submit"
                   >
                     {copy.management.categorySave}
@@ -503,10 +570,7 @@ export function ManagementDashboard({
                     className="text-button"
                     disabled={requestBusy}
                     type="button"
-                    onClick={() => {
-                      setEditingCategory(draft.id);
-                      setCategoryValue(draft.category ?? "");
-                    }}
+                    onClick={() => startCategoryEdit(draft)}
                   >
                     {draft.category === null
                       ? copy.management.categorySet

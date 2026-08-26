@@ -1447,7 +1447,11 @@ footer a {
   align-items: center;
 }
 
-.category-form input {
+/* The select keeps the native arrow and popup: it lands on the correct side in
+   both directions and follows the page color scheme in both themes. */
+.category-form input,
+.category-form select {
+  max-width: 100%;
   min-height: 34px;
   padding: 0 10px;
   border: 1px solid var(--ink);
@@ -1455,6 +1459,11 @@ footer a {
   color: var(--ink);
   font: inherit;
   font-size: 0.82rem;
+}
+
+.category-form select {
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .public-link {

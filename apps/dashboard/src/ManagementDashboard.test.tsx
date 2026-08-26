@@ -670,7 +670,7 @@ describe("signed-in management dashboard", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("adds a category to a report and offers it as a filter", async () => {
+  it("types the first category of the account and offers it as a filter", async () => {
     document.cookie = "yaaps_csrf=csrf-token; Path=/";
     let categorized = false;
     const fetchImplementation = vi.fn<typeof fetch>(async (input, init) => {
@@ -710,8 +710,10 @@ describe("signed-in management dashboard", () => {
         name: localeDocuments.en.management.categorySet,
       }),
     );
+    // With no category to pick from, the editor offers the text input alone.
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
     fireEvent.change(
-      screen.getByLabelText(localeDocuments.en.management.categoryLabel),
+      screen.getByLabelText(localeDocuments.en.management.categoryNewLabel),
       { target: { value: ` ${weeklyCategory} ` } },
     );
     fireEvent.click(
@@ -738,6 +740,90 @@ describe("signed-in management dashboard", () => {
         name: localeDocuments.en.management.categoryEdit,
       }),
     ).toBeVisible();
+  });
+
+  it("moves a report to a category picked from the list", async () => {
+    document.cookie = "yaaps_csrf=csrf-token; Path=/";
+    let assigned = false;
+    const fetchImplementation = vi.fn<typeof fetch>(async (input, init) => {
+      const url = String(input);
+      if (url.startsWith("/dashboard/api/drafts?")) {
+        return json({
+          items: [
+            assigned ? { ...draft, category: weeklyCategory } : draft,
+            categorizedDraft,
+          ],
+          limit: 100,
+          offset: 0,
+          total: 2,
+        });
+      }
+      if (url === "/auth/api-keys") return json({ items: [] });
+      if (url === "/dashboard/api/categories") {
+        return json({
+          items: [{ category: weeklyCategory, draftCount: assigned ? 2 : 1 }],
+        });
+      }
+      if (url.endsWith(draft.id) && init?.method === "PATCH") {
+        assigned = true;
+        return json({ ...draft, category: weeklyCategory });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    renderDashboard(fetchImplementation, "reports");
+
+    await screen.findByText(draft.title);
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: localeDocuments.en.management.categorySet,
+      }),
+    );
+    const select = screen.getByLabelText(
+      localeDocuments.en.management.categoryLabel,
+    );
+    // A report without a category starts on the placeholder, so there is
+    // nothing to save yet.
+    expect(
+      screen.getByRole("option", {
+        name: localeDocuments.en.management.categoryChoose,
+      }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", {
+        name: localeDocuments.en.management.categorySave,
+      }),
+    ).toBeDisabled();
+    expect(
+      screen.queryByLabelText(localeDocuments.en.management.categoryNewLabel),
+    ).not.toBeInTheDocument();
+
+    fireEvent.change(select, {
+      target: {
+        value: (
+          screen.getByRole("option", {
+            name: weeklyCategory,
+          }) as HTMLOptionElement
+        ).value,
+      },
+    });
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: localeDocuments.en.management.categorySave,
+      }),
+    );
+
+    expect(
+      await screen.findByRole("button", {
+        name: filterOptionName(weeklyCategory, 2),
+      }),
+    ).toBeVisible();
+    expect(fetchImplementation).toHaveBeenCalledWith(
+      `/dashboard/api/drafts/${draft.id}`,
+      expect.objectContaining({
+        body: JSON.stringify({ category: weeklyCategory }),
+        method: "PATCH",
+      }),
+    );
   });
 
   it("changes and then removes the category of a report", async () => {
@@ -775,10 +861,28 @@ describe("signed-in management dashboard", () => {
         name: localeDocuments.en.management.categoryEdit,
       }),
     );
-    const input = screen.getByLabelText(
+    const select = screen.getByLabelText(
       localeDocuments.en.management.categoryLabel,
     );
-    expect(input).toHaveValue(weeklyCategory);
+    const currentOption = screen.getByRole("option", {
+      name: weeklyCategory,
+    }) as HTMLOptionElement;
+    expect(select).toHaveValue(currentOption.value);
+    fireEvent.change(select, {
+      target: {
+        value: (
+          screen.getByRole("option", {
+            name: localeDocuments.en.management.categoryNew,
+          }) as HTMLOptionElement
+        ).value,
+      },
+    });
+    // The select stays available so the choice can be taken back.
+    expect(select).toBeVisible();
+    const input = screen.getByLabelText(
+      localeDocuments.en.management.categoryNewLabel,
+    );
+    expect(input).toHaveValue("");
     fireEvent.change(input, { target: { value: monthlyCategory } });
     fireEvent.click(
       screen.getByRole("button", {
