@@ -1,6 +1,6 @@
 {
   "name": "yaaps-ai",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Command-line client for YAAPS (yaaps.net): publish agent-made HTML reports as temporary shareable links.",
   "license": "MIT",
   "type": "module",
@@ -32,5 +32,14 @@
     "@types/css-tree": "3.2.0",
     "@yaaps/contracts": "*",
     "esbuild": "0.28.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ShlomiPorush/yaaps.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://yaaps.net",
+  "bugs": {
+    "url": "https://github.com/ShlomiPorush/yaaps/issues"
   }
 }
