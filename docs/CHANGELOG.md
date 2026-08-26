@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+## [1.3.1] - 2026-08-27
+
 ### Changed
 
 - The landing publishing chat now uses a locally hosted bilingual Rubik typeface for conversational text while keeping command and report-link fragments monospace.
