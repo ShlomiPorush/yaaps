@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+## [1.2.0] - 2026-08-26
+
 ### Added
 
 - A monthly GitHub Actions check now raises the deferred upgrades for discussion when Node.js 26 reaches LTS or the latest typescript-eslint release supports TypeScript 7, without changing dependencies or creating duplicate issues.
