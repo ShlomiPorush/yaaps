@@ -283,6 +283,33 @@ describe("authentication HTTP boundary", () => {
       createdKey.json().key,
     );
 
+    const renameMissingCsrf = await application.inject({
+      headers: { cookie: browserCookies },
+      method: "PATCH",
+      payload: { label: "Renamed agent" },
+      url: `/auth/api-keys/${createdKey.json().id}`,
+    });
+    expect(renameMissingCsrf.statusCode).toBe(403);
+
+    const renamedKey = await application.inject({
+      headers: { cookie: browserCookies, "x-csrf-token": csrfToken },
+      method: "PATCH",
+      payload: { label: "Renamed agent" },
+      url: `/auth/api-keys/${createdKey.json().id}`,
+    });
+    expect(renamedKey.statusCode).toBe(200);
+    expect(renamedKey.json()).toMatchObject({
+      id: createdKey.json().id,
+      label: "Renamed agent",
+      prefix: createdKey.json().prefix,
+    });
+    const listedAfterRename = await application.inject({
+      headers: { cookie: browserCookies },
+      method: "GET",
+      url: "/auth/api-keys",
+    });
+    expect(listedAfterRename.json().items[0].label).toBe("Renamed agent");
+
     const signOut = await application.inject({
       headers: { cookie: browserCookies, "x-csrf-token": csrfToken },
       method: "POST",
@@ -347,6 +374,23 @@ describe("authentication HTTP boundary", () => {
     await expect(
       repository.authenticateApiKey(createdKey.json().key as string),
     ).resolves.toMatchObject({ userId: firstUser });
+
+    const crossUserRename = await application.inject({
+      headers: {
+        cookie: cookieHeader(secondCookies),
+        "x-csrf-token": secondCookies.yaaps_csrf!,
+      },
+      method: "PATCH",
+      payload: { label: "Hijacked" },
+      url: `/auth/api-keys/${createdKey.json().id}`,
+    });
+    expect(crossUserRename.statusCode).toBe(403);
+    const firstUserKeys = await application.inject({
+      headers: { cookie: cookieHeader(firstCookies) },
+      method: "GET",
+      url: "/auth/api-keys",
+    });
+    expect(firstUserKeys.json().items[0].label).toBe("First key");
     await application.close();
   });
 

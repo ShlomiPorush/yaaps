@@ -2,6 +2,7 @@ import type {
   AdminUserSummary,
   AdminDraftSummary,
   ApiKeyListResponse,
+  ApiKeySummary,
   ApproveDeviceConnectionResponse,
   CreatedApiKeyResponse,
   CreatedInvitationResponse,
@@ -100,6 +101,12 @@ export class DashboardApi {
 
   async revokeApiKey(id: string): Promise<void> {
     await this.#mutate(`/auth/api-keys/${encodeURIComponent(id)}`, "DELETE");
+  }
+
+  async renameApiKey(id: string, label: string): Promise<ApiKeySummary> {
+    return this.#mutate(`/auth/api-keys/${encodeURIComponent(id)}`, "PATCH", {
+      label,
+    });
   }
 
   async regenerateRecoveryCodes(): Promise<{ recoveryCodes: string[] }> {

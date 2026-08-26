@@ -60,6 +60,8 @@ export function ManagementDashboard({
   >({});
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [confirmRevoke, setConfirmRevoke] = useState<string | null>(null);
+  const [renamingKey, setRenamingKey] = useState<string | null>(null);
+  const [renameLabel, setRenameLabel] = useState("");
   const [confirmRegenerateCodes, setConfirmRegenerateCodes] = useState(false);
   const [regeneratedCodes, setRegeneratedCodes] = useState<string[]>([]);
 
@@ -185,6 +187,17 @@ export function ManagementDashboard({
       const response = await api.regenerateRecoveryCodes();
       setRegeneratedCodes(response.recoveryCodes);
       setConfirmRegenerateCodes(false);
+    });
+  }
+
+  async function renameApiKey(event: FormEvent<HTMLFormElement>, id: string) {
+    event.preventDefault();
+    await withRequest(async () => {
+      const updated = await api.renameApiKey(id, renameLabel);
+      setApiKeys((current) =>
+        current.map((key) => (key.id === updated.id ? updated : key)),
+      );
+      setRenamingKey(null);
     });
   }
 
@@ -388,7 +401,37 @@ export function ManagementDashboard({
         {apiKeys.map((key) => (
           <div className="key-item" key={key.id}>
             <div>
-              <strong>{key.label}</strong>
+              {renamingKey === key.id ? (
+                <form
+                  className="key-rename-form"
+                  onSubmit={(event) => void renameApiKey(event, key.id)}
+                >
+                  <input
+                    autoFocus
+                    required
+                    aria-label={copy.management.keyLabel}
+                    maxLength={100}
+                    value={renameLabel}
+                    onChange={(event) => setRenameLabel(event.target.value)}
+                  />
+                  <button
+                    className="text-button"
+                    disabled={requestBusy}
+                    type="submit"
+                  >
+                    {copy.management.renameSave}
+                  </button>
+                  <button
+                    className="text-button"
+                    type="button"
+                    onClick={() => setRenamingKey(null)}
+                  >
+                    {copy.management.cancel}
+                  </button>
+                </form>
+              ) : (
+                <strong>{key.label}</strong>
+              )}
               <code dir="ltr">{key.prefix}…</code>
               <small>
                 {key.lastUsedAt
@@ -416,13 +459,27 @@ export function ManagementDashboard({
                 </button>
               </span>
             ) : (
-              <button
-                className="text-button danger-text"
-                type="button"
-                onClick={() => setConfirmRevoke(key.id)}
-              >
-                {copy.management.revoke}
-              </button>
+              <span className="confirm-actions vertical">
+                {renamingKey !== key.id && (
+                  <button
+                    className="text-button"
+                    type="button"
+                    onClick={() => {
+                      setRenamingKey(key.id);
+                      setRenameLabel(key.label);
+                    }}
+                  >
+                    {copy.management.rename}
+                  </button>
+                )}
+                <button
+                  className="text-button danger-text"
+                  type="button"
+                  onClick={() => setConfirmRevoke(key.id)}
+                >
+                  {copy.management.revoke}
+                </button>
+              </span>
             )}
           </div>
         ))}

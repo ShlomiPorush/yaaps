@@ -1349,6 +1349,25 @@ footer a {
   font: inherit;
 }
 
+.key-rename-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.key-rename-form input {
+  min-width: 0;
+  flex: 1 1 140px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--ink);
+  background: var(--background);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.85rem;
+}
+
 .one-time-key {
   margin-bottom: 20px;
   padding: 15px;

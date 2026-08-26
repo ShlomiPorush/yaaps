@@ -365,6 +365,58 @@ describe("signed-in management dashboard", () => {
     expect(storedPrefix).toHaveAttribute("dir", "ltr");
   });
 
+  it("renames an API key in place with CSRF", async () => {
+    document.cookie = "yaaps_csrf=csrf-token; Path=/";
+    const keyId = "8f7c1ca3-edbc-4b4b-b349-d45322728936";
+    const storedKey = {
+      createdAt: "2026-08-24T08:00:00.000Z",
+      id: keyId,
+      label: "Local agent",
+      lastUsedAt: null,
+      prefix: "yaaps_prefix",
+    };
+    const fetchImplementation = vi.fn<typeof fetch>(async (input, init) => {
+      const url = String(input);
+      if (url.startsWith("/dashboard/api/drafts?")) {
+        return json({ items: [], limit: 100, offset: 0, total: 0 });
+      }
+      if (url === "/auth/api-keys") {
+        return json({ items: [storedKey] });
+      }
+      if (url === `/auth/api-keys/${keyId}` && init?.method === "PATCH") {
+        return json({ ...storedKey, label: "Weekly reports" });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    renderDashboard(fetchImplementation, "settings");
+
+    await screen.findByText(storedKey.label);
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: localeDocuments.en.management.rename,
+      }),
+    );
+    fireEvent.change(screen.getByDisplayValue(storedKey.label), {
+      target: { value: "Weekly reports" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: localeDocuments.en.management.renameSave,
+      }),
+    );
+
+    await screen.findByText("Weekly reports");
+    expect(screen.queryByText(storedKey.label)).not.toBeInTheDocument();
+    expect(fetchImplementation).toHaveBeenCalledWith(
+      `/auth/api-keys/${keyId}`,
+      expect.objectContaining({
+        body: JSON.stringify({ label: "Weekly reports" }),
+        headers: expect.objectContaining({ "x-csrf-token": "csrf-token" }),
+        method: "PATCH",
+      }),
+    );
+  });
+
   it("isolates displayed recovery codes from Hebrew page direction", async () => {
     const recoveryCode = "yar_save-this_once";
     const fetchImplementation = vi.fn<typeof fetch>(async (input) => {

@@ -232,6 +232,8 @@
     "openReport": "Open report",
     "owner": "Owner:",
     "pending": "Pending",
+    "rename": "Rename",
+    "renameSave": "Save name",
     "reportDisabled": "Not shared",
     "reportsEyebrow": "Published by your agents",
     "reportsHeading": "Reports",

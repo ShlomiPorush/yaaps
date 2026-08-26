@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Added
+
+- API keys can be renamed from the dashboard, so a key's name can stay meaningful without revoking and recreating it.
+
 ### Fixed
 
 - The Windows skill helper no longer crashes while waiting for connection approval when PowerShell 7 runs with a non en-US regional format, which previously lost the approval and left the device unconnected.
