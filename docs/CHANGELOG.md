@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Changed
+
+- Merges to main no longer rerun the full verification matrix; pull requests, the weekly scheduled run, and the release tag remain the verification gates.
+
 ## [1.1.0] - 2026-08-26
 
 ### Added
