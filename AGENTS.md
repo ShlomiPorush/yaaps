@@ -64,6 +64,16 @@ When the assistant leading a session can spawn subagents, it works as a supervis
 - The lead performs directly only what delegation handles poorly: small glue fixes, conflict resolution, Git and GitHub state changes, and final verification.
 - Parallel subagents must not share one working tree; give concurrent work isolated worktrees or serialize it.
 
+## Release procedure
+
+Releases require explicit owner authorization and happen in a dedicated release pull request, never mixed into feature work.
+
+1. Start from a clean, up-to-date `main` and set the new SemVer in the root `VERSION` file.
+2. Run `npm run version:sync` (updates every workspace `package.json` and `FOUNDATION_VERSION` in `packages/contracts/src/index.ts`), then `npm install` to refresh the workspace entries in `package-lock.json`. Skipping the install breaks `npm ci` in CI before any version check runs.
+3. In `docs/CHANGELOG.md`, insert `## [X.Y.Z] - YYYY-MM-DD` directly beneath an emptied `## Unreleased` heading and move the accumulated bullets into it, keeping the `### Added` / `### Changed` / `### Fixed` order. The GitHub release notes are extracted from exactly this section; a missing heading silently degrades them to a placeholder.
+4. Verify, open the release PR, and merge it with CI green.
+5. Tag the merge commit `vX.Y.Z` and push the tag. The tag workflow rejects the release unless the tag version equals `VERSION`, the root and CLI `package.json` versions, and `FOUNDATION_VERSION`; it then reruns full verification, publishes the container image to `ghcr.io/shlomiporush/yaaps` (`X.Y.Z`, `sha-*`, and `latest` for stable versions), publishes `yaaps-ai` to npm through the OIDC trusted publisher (fails if the version already exists on npm), and creates the GitHub release from the changelog section.
+
 ## Git and external boundaries
 
 The repository owner controls merges, releases, deployments, production changes, DNS, GitHub configuration, and registry publication. Do not perform them without explicit authorization in the current request.
