@@ -162,6 +162,24 @@ async function expectPublishingIllustration(
       exact: true,
     }),
   ).toHaveCSS("direction", documentDirection(copy));
+  for (const selector of [
+    ".publishing-message-user > small",
+    ".publishing-request",
+    ".publishing-processing",
+    ".publishing-success",
+    ".publishing-expiry",
+  ]) {
+    await expect(illustration.locator(selector)).toHaveCSS(
+      "font-family",
+      /Rubik Variable/u,
+    );
+  }
+  for (const selector of [".publishing-skill-tag", ".publishing-share-link"]) {
+    await expect(illustration.locator(selector)).toHaveCSS(
+      "font-family",
+      /SFMono-Regular/u,
+    );
+  }
   await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
   await expect(illustration).toHaveCSS(
     "background-color",

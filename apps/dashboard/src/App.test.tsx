@@ -240,18 +240,21 @@ describe("dashboard foundation", () => {
       localeDocuments.he.dashboard.terminalPrompt,
     );
     expect(promptLine.closest('[dir="ltr"]')).toBeNull();
-    expect(within(promptLine).getByText("$yaaps")).toHaveAttribute(
-      "dir",
-      "ltr",
-    );
+    const skillTag = within(promptLine).getByText("$yaaps");
+    expect(skillTag).toHaveAttribute("dir", "ltr");
+    expect(skillTag).toHaveClass("publishing-skill-tag");
     expect(
       within(illustration)
         .getByText(localeDocuments.he.dashboard.terminalResponseLabel)
         .closest('[dir="ltr"]'),
     ).toBeNull();
-    expect(
-      within(resultLine).getByText(localeDocuments.he.dashboard.terminalResult),
-    ).toHaveAttribute("dir", "ltr");
+    const shareLink = within(resultLine).getByText(
+      localeDocuments.he.dashboard.terminalResult,
+    );
+    expect(shareLink).toHaveAttribute("dir", "ltr");
+    expect(shareLink).toHaveClass("publishing-share-link");
+    expect(promptLine).not.toHaveClass("publishing-skill-tag");
+    expect(resultLine).not.toHaveClass("publishing-share-link");
   });
 
   it("shows a localized deadline exactly 24 hours after the illustration mounts", () => {
