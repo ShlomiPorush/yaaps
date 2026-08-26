@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+## [1.3.0] - 2026-08-26
+
 ### Added
 
 - Reports can be grouped under a category. The dashboard shows each report's category, filters the list by it, and lets it be set, changed, or cleared; the agent API accepts a category when publishing, updating, and listing drafts and reports the categories in use; the CLI adds `publish --category`, `list --category`, and `categorize`; and the Agent Skill helpers expose the same commands.
