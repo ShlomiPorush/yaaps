@@ -243,7 +243,11 @@ export function ManagementDashboard({
             <div className="draft-primary">
               <div>
                 <div className="draft-title-line">
-                  <h3>{draft.title ?? copy.management.untitled}</h3>
+                  <h3>
+                    <a href={draft.publicUrl} target="_blank" rel="noreferrer">
+                      {draft.title ?? copy.management.untitled}
+                    </a>
+                  </h3>
                   <span className={`state-badge ${draft.status}`}>
                     {draft.status === "enabled"
                       ? copy.management.enabled

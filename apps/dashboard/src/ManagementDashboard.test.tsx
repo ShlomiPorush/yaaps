@@ -246,6 +246,29 @@ describe("signed-in management dashboard", () => {
     );
   });
 
+  it("opens the public report from its title as well as the dedicated link", async () => {
+    const fetchImplementation = vi.fn<typeof fetch>(async (input) => {
+      const url = String(input);
+      if (url.startsWith("/dashboard/api/drafts?")) {
+        return json({ items: [draft], limit: 100, offset: 0, total: 1 });
+      }
+      if (url === "/auth/api-keys") return json({ items: [] });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    renderDashboard(fetchImplementation, "reports");
+
+    const titleLink = await screen.findByRole("link", { name: draft.title });
+    expect(titleLink).toHaveAttribute("href", draft.publicUrl);
+    expect(titleLink).toHaveAttribute("target", "_blank");
+    const openLink = screen.getByRole("link", {
+      name: localeDocuments.en.management.openReport,
+    });
+    expect(openLink).toHaveAttribute("href", draft.publicUrl);
+    expect(
+      screen.getByRole("heading", { level: 3, name: draft.title }),
+    ).toContainElement(titleLink);
+  });
+
   it("requires a second explicit action before permanently deleting a report", async () => {
     document.cookie = "yaaps_csrf=csrf-token; Path=/";
     const fetchImplementation = vi.fn<typeof fetch>(async (input, init) => {

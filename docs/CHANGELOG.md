@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - API keys can be renamed from the dashboard, so a key's name can stay meaningful without revoking and recreating it.
 
+### Changed
+
+- A report's title in the dashboard now opens the shared report directly, and the open-report link looks like the other row actions instead of a plain text link.
+
 ### Fixed
 
 - Share-preview images are now served with a relaxed cross-origin resource policy, so browser-based link-preview checkers can display the social card image instead of a broken placeholder.
