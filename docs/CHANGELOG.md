@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+## [1.1.0] - 2026-08-26
+
 ### Added
 
 - API keys can be renamed from the dashboard, so a key's name can stay meaningful without revoking and recreating it.
