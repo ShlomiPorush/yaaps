@@ -139,6 +139,9 @@ export const apiKeyLabelSchema = z.string().trim().min(1).max(100);
 export const createApiKeyRequestSchema = z.object({
   label: apiKeyLabelSchema,
 });
+export const updateApiKeyRequestSchema = z.object({
+  label: apiKeyLabelSchema,
+});
 export const apiKeyPrefixSchema = z.string().regex(/^yaaps_[A-Za-z0-9_-]{10}$/);
 export const apiKeySchema = z
   .string()

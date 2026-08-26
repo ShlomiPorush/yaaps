@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Added
+
+- API keys can be renamed from the dashboard, so a key's name can stay meaningful without revoking and recreating it.
+
 ### Fixed
 
 - Share-preview images are now served with a relaxed cross-origin resource policy, so browser-based link-preview checkers can display the social card image instead of a broken placeholder.

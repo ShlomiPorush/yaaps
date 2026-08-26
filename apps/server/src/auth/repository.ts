@@ -256,6 +256,36 @@ export class AuthenticationRepository {
     }));
   }
 
+  async renameApiKey(
+    ownerId: string,
+    apiKeyId: string,
+    label: string,
+  ): Promise<ApiKeySummary> {
+    const result = await this.database
+      .updateTable("api_keys")
+      .set({ label })
+      .where("id", "=", apiKeyId)
+      .where("user_id", "=", ownerId)
+      .where("revoked_at", "is", null)
+      .executeTakeFirst();
+    if (result.numUpdatedRows !== 1n) {
+      throw new AuthorizationError();
+    }
+    await this.#audit(ownerId, null, "api_key.renamed", "api_key", apiKeyId);
+    const key = await this.database
+      .selectFrom("api_keys")
+      .select(["created_at", "id", "key_prefix", "label", "last_used_at"])
+      .where("id", "=", apiKeyId)
+      .executeTakeFirstOrThrow();
+    return {
+      createdAt: key.created_at,
+      id: key.id,
+      label: key.label,
+      lastUsedAt: key.last_used_at,
+      prefix: key.key_prefix,
+    };
+  }
+
   async revokeApiKey(ownerId: string, apiKeyId: string): Promise<void> {
     const result = await this.database
       .updateTable("api_keys")
