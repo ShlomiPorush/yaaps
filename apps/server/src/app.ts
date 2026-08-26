@@ -443,6 +443,8 @@ export async function buildApplication(
       });
 
       // Share-preview images referenced by og:image live at the site root.
+      // Link-preview tools embed them cross-origin in a browser, so helmet's
+      // default same-origin Cross-Origin-Resource-Policy must be relaxed here.
       for (const imageName of ["og-site.png", "og-report.png"]) {
         try {
           const imageBody = await readFile(
@@ -452,6 +454,7 @@ export async function buildApplication(
             reply
               .type("image/png")
               .header("cache-control", "public, max-age=86400")
+              .header("cross-origin-resource-policy", "cross-origin")
               .send(imageBody),
           );
         } catch {
