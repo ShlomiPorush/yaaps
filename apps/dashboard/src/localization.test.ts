@@ -37,8 +37,17 @@ describe("expiry formatting", () => {
 
   it("localizes the duration units in Hebrew", () => {
     const text = formatRemainingDuration("he", "2026-08-31T15:30:00.000Z", now);
-    expect(text).toContain("ימים");
-    expect(text).toContain("שעות");
+    // Hebrew literals live only in he.json, so derive the expected unit
+    // wording from the same Intl data the formatter localizes with.
+    const hebrewUnit = (amount: number, unit: "day" | "hour") =>
+      new Intl.NumberFormat("he", {
+        style: "unit",
+        unit,
+        unitDisplay: "long",
+      }).format(amount);
+    expect(hebrewUnit(5, "day")).not.toBe("5 days");
+    expect(text).toContain(hebrewUnit(5, "day"));
+    expect(text).toContain(hebrewUnit(3, "hour"));
   });
 
   it("formats the calendar date with the device regional format", () => {
