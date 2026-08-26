@@ -341,7 +341,7 @@ describe("CLI draft categories", () => {
     ]);
     expect(created.errors).toEqual([]);
     expect(created.requests[0]?.url).toBe(
-      "https://share.example.test/api/drafts?category=Sales+reports",
+      "https://share.example.test/api/drafts?resourcePolicy=isolated&category=Sales+reports",
     );
 
     const versioned = await buildProgram(published);
@@ -358,7 +358,36 @@ describe("CLI draft categories", () => {
     ]);
     expect(versioned.errors).toEqual([]);
     expect(versioned.requests[0]?.url).toBe(
-      `https://share.example.test/api/drafts/${draftId}/versions?category=Sales+reports`,
+      `https://share.example.test/api/drafts/${draftId}/versions?resourcePolicy=isolated&category=Sales+reports`,
+    );
+  });
+
+  it("sends the selected connected resource policy", async () => {
+    const published = {
+      draft: summary,
+      version: {
+        byteLength: 128,
+        createdAt: "2026-08-26T00:00:00.000Z",
+        publicUrl: `${summary.publicUrl}/v/2`,
+        sha256: "a".repeat(64),
+        versionNumber: 2,
+      },
+    };
+    const connected = await buildProgram(published);
+
+    await connected.program.parseAsync([
+      "node",
+      "yaaps",
+      "publish",
+      "report.html",
+      "--mode",
+      "connected",
+      "--json",
+    ]);
+
+    expect(connected.errors).toEqual([]);
+    expect(connected.requests[0]?.url).toBe(
+      "https://share.example.test/api/drafts?resourcePolicy=connected",
     );
   });
 

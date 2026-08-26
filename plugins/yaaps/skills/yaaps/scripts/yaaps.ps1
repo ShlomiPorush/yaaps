@@ -243,14 +243,17 @@ try {
             Write-Json ([ordered]@{ health = $health; readiness = $readiness })
         }
         'publish' {
-            $options = Parse-Options $CommandArguments @() @('category', 'draft-id', 'title', 'ttl')
-            if ($options.Positionals.Count -ne 1) { Fail 'Usage: publish <html-file> [--category <name>] [--draft-id <id>] [--title <title>] [--ttl <seconds>]' }
+            $options = Parse-Options $CommandArguments @() @('category', 'draft-id', 'mode', 'title', 'ttl')
+            if ($options.Positionals.Count -ne 1) { Fail 'Usage: publish <html-file> [--mode isolated|connected] [--category <name>] [--draft-id <id>] [--title <title>] [--ttl <seconds>]' }
             $file = [IO.Path]::GetFullPath([string]$options.Positionals[0])
             if (-not [IO.File]::Exists($file)) { Fail 'The HTML file does not exist.' }
+            $resourcePolicy = if ($options.ContainsKey('mode')) { [string]$options.mode } else { 'isolated' }
+            if ($resourcePolicy -notin @('isolated', 'connected')) { Fail '--mode must be either isolated or connected.' }
             $credentials = Get-Credentials
             $route = '/api/drafts'
             if ($options.ContainsKey('draft-id')) { $route += '/' + (Assert-DraftId $options.'draft-id') + '/versions' }
             $query = [System.Collections.ArrayList]@()
+            [void]$query.Add('resourcePolicy=' + $resourcePolicy)
             if ($options.ContainsKey('category')) { [void]$query.Add('category=' + (Encode $options.category)) }
             if ($options.ContainsKey('title')) { [void]$query.Add('title=' + (Encode $options.title)) }
             if ($options.ContainsKey('ttl')) {

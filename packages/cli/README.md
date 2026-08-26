@@ -34,6 +34,21 @@ Publish a complete HTML document. Supported local bitmap references in HTML and 
 yaaps publish ./report.html --title "Weekly report"
 ```
 
+Publishing uses `--mode isolated` by default. Isolated reports may contain
+HTTPS hyperlinks, but they cannot load network resources. Use connected mode
+when a sketch or report intentionally depends on HTTPS images, stylesheets, or
+CSS resources such as web fonts:
+
+```sh
+yaaps publish ./prototype.html --mode connected
+```
+
+Connected mode preserves HTTPS image URLs, HTTPS URLs in CSS, and only
+`<link rel="stylesheet" href="https://...">` stylesheet links. Both modes
+continue to reject HTTP resources, scripts, event handlers, forms, frames,
+plugins, CSS imports, and other executable or unsafe resource constructs.
+Local bitmap files are embedded in either mode.
+
 Publishing the same local file again creates a new immutable version under its mapped draft. Use `--new-draft` to deliberately replace that mapping.
 
 Add `--category` to group related reports under one label. Publishing a new version with `--category` updates the stored category:

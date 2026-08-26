@@ -28,7 +28,7 @@ import {
   type CliConfig,
 } from "./config.js";
 import { openExternalUrl } from "./browser.js";
-import { normalizeHtmlFile } from "./normalize.js";
+import { normalizeHtmlFile, type ResourcePolicy } from "./normalize.js";
 import { fetchServiceStatus } from "./status.js";
 import {
   generateApiKey,
@@ -78,6 +78,15 @@ function boundedIntegerOption(
     }
     return parsed;
   };
+}
+
+function resourcePolicyOption(value: string): ResourcePolicy {
+  if (value !== "isolated" && value !== "connected") {
+    throw new InvalidArgumentError(
+      "--mode must be either isolated or connected.",
+    );
+  }
+  return value;
 }
 
 const DRAFT_ID_OPERAND = /^-[A-Za-z0-9_-]{31}$/;
@@ -395,10 +404,16 @@ export function createProgram(dependencies: ProgramDependencies = {}): Command {
   addCredentialOptions(
     program
       .command("publish <file>")
-      .description("Normalize and publish one self-contained HTML report.")
+      .description("Normalize and publish one HTML report.")
       .option("--category <name>", "Set or update the report category")
       .option("--draft-id <id>", "Publish a version to an explicit draft")
       .option("--new-draft", "Create a new draft and replace the local mapping")
+      .option(
+        "--mode <mode>",
+        "Resource policy: isolated or connected",
+        resourcePolicyOption,
+        "isolated",
+      )
       .option("--title <title>", "Set or update the report title")
       .option(
         "--ttl <seconds>",
@@ -413,6 +428,7 @@ export function createProgram(dependencies: ProgramDependencies = {}): Command {
         category?: string;
         draftId?: string;
         json?: boolean;
+        mode: ResourcePolicy;
         newDraft?: boolean;
         title?: string;
         ttl?: number;
@@ -444,7 +460,8 @@ export function createProgram(dependencies: ProgramDependencies = {}): Command {
           {
             category: options.category,
             draftId,
-            html: await normalizeHtmlFile(filePath),
+            html: await normalizeHtmlFile(filePath, options.mode),
+            resourcePolicy: options.mode,
             title: options.title,
             ttlSeconds: options.ttl,
           },

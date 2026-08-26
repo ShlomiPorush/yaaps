@@ -21,6 +21,8 @@ type HtmlElement = DefaultTreeAdapterMap["element"];
 type HtmlTemplate = DefaultTreeAdapterMap["template"];
 type HtmlTextNode = DefaultTreeAdapterMap["textNode"];
 
+export type ResourcePolicy = "connected" | "isolated";
+
 const EMBEDDED_BITMAP =
   /^data:image\/(?:avif|gif|jpeg|png|webp);base64,[a-z0-9+/]+=*$/i;
 const EMBEDDED_CSS_RESOURCE =
@@ -129,6 +131,7 @@ async function normalizeResourceUrl(
   value: string,
   htmlDirectory: string,
   context: "bitmap" | "css",
+  resourcePolicy: ResourcePolicy,
 ): Promise<string> {
   const normalized = value.trim();
   if (normalized.startsWith("#")) return normalized;
@@ -143,13 +146,33 @@ async function normalizeResourceUrl(
       `The embedded asset uses an unsupported media type: ${value}`,
     );
   }
+  if (isHttpsUrl(normalized)) {
+    if (resourcePolicy === "connected") return normalized;
+    throw new HtmlNormalizationError(
+      `External resource loading is disabled in isolated mode: ${value}. Publish with --mode connected to allow HTTPS resources.`,
+    );
+  }
   return embedLocalBitmap(normalized, htmlDirectory);
+}
+
+function isHttpsUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    return (
+      parsed.protocol === "https:" &&
+      parsed.username === "" &&
+      parsed.password === ""
+    );
+  } catch {
+    return false;
+  }
 }
 
 async function normalizeCss(
   source: string,
   htmlDirectory: string,
   context: "declarationList" | "stylesheet" | "value",
+  resourcePolicy: ResourcePolicy,
 ): Promise<string> {
   let parseFailed = false;
   let tree;
@@ -187,7 +210,12 @@ async function normalizeCss(
   });
 
   for (const url of urls) {
-    url.value = await normalizeResourceUrl(url.value, htmlDirectory, "css");
+    url.value = await normalizeResourceUrl(
+      url.value,
+      htmlDirectory,
+      "css",
+      resourcePolicy,
+    );
   }
   return generateCss(tree);
 }
@@ -226,23 +254,48 @@ function validateExplicitDocument(source: string): void {
 async function normalizeElement(
   element: HtmlElement,
   htmlDirectory: string,
+  resourcePolicy: ResourcePolicy,
 ): Promise<void> {
   const tagName = element.tagName.toLowerCase();
   if (
-    [
-      "applet",
-      "base",
-      "embed",
-      "form",
-      "iframe",
-      "link",
-      "object",
-      "script",
-    ].includes(tagName)
+    ["applet", "base", "embed", "form", "iframe", "object", "script"].includes(
+      tagName,
+    )
   ) {
     throw new HtmlNormalizationError(
       `The <${tagName}> element is not publishable.`,
     );
+  }
+
+  if (tagName === "link") {
+    const attributes = new Map(
+      element.attrs.map((attribute) => [
+        attribute.name.toLowerCase(),
+        attribute.value,
+      ]),
+    );
+    const rel = attributes
+      .get("rel")
+      ?.trim()
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(Boolean);
+    const href = attributes.get("href")?.trim();
+    if (rel?.length !== 1 || rel[0] !== "stylesheet" || !href) {
+      throw new HtmlNormalizationError(
+        'Only <link rel="stylesheet" href="https://..."> is publishable.',
+      );
+    }
+    if (!isHttpsUrl(href)) {
+      throw new HtmlNormalizationError(
+        "External stylesheets must use HTTPS URLs without embedded credentials.",
+      );
+    }
+    if (resourcePolicy !== "connected") {
+      throw new HtmlNormalizationError(
+        "External stylesheet loading is disabled in isolated mode. Publish with --mode connected to allow HTTPS stylesheets.",
+      );
+    }
   }
 
   for (const attribute of element.attrs) {
@@ -267,18 +320,27 @@ async function normalizeElement(
         attribute.value,
         htmlDirectory,
         "bitmap",
+        resourcePolicy,
       );
     }
     if (name === "href") {
-      if (tagName === "image") {
+      if (tagName === "link") {
+        attribute.value = attribute.value.trim();
+      } else if (tagName === "image") {
         attribute.value = await normalizeResourceUrl(
           attribute.value,
           htmlDirectory,
           "bitmap",
+          resourcePolicy,
         );
+      } else if (
+        ["a", "area"].includes(tagName) &&
+        isHttpsUrl(attribute.value.trim())
+      ) {
+        attribute.value = attribute.value.trim();
       } else if (!attribute.value.startsWith("#")) {
         throw new HtmlNormalizationError(
-          "Links may reference only locations inside the report.",
+          "Links may use only HTTPS URLs without embedded credentials or locations inside the report.",
         );
       }
     }
@@ -287,6 +349,7 @@ async function normalizeElement(
         attribute.value,
         htmlDirectory,
         "declarationList",
+        resourcePolicy,
       );
     }
     if (CSS_VALUE_ATTRIBUTES.has(name)) {
@@ -294,6 +357,7 @@ async function normalizeElement(
         attribute.value,
         htmlDirectory,
         "value",
+        resourcePolicy,
       );
     }
   }
@@ -303,7 +367,12 @@ async function normalizeElement(
       .filter(isTextNode)
       .map((node) => node.value)
       .join("");
-    const normalized = await normalizeCss(css, htmlDirectory, "stylesheet");
+    const normalized = await normalizeCss(
+      css,
+      htmlDirectory,
+      "stylesheet",
+      resourcePolicy,
+    );
     element.childNodes = [
       {
         nodeName: "#text",
@@ -314,16 +383,23 @@ async function normalizeElement(
   }
 
   for (const child of element.childNodes) {
-    if (isElement(child)) await normalizeElement(child, htmlDirectory);
+    if (isElement(child)) {
+      await normalizeElement(child, htmlDirectory, resourcePolicy);
+    }
   }
   if (tagName === "template" && "content" in element) {
     for (const child of (element as HtmlTemplate).content.childNodes) {
-      if (isElement(child)) await normalizeElement(child, htmlDirectory);
+      if (isElement(child)) {
+        await normalizeElement(child, htmlDirectory, resourcePolicy);
+      }
     }
   }
 }
 
-export async function normalizeHtmlFile(filePath: string): Promise<Buffer> {
+export async function normalizeHtmlFile(
+  filePath: string,
+  resourcePolicy: ResourcePolicy = "isolated",
+): Promise<Buffer> {
   const absolutePath = path.resolve(filePath);
   let input: Buffer;
   try {
@@ -359,7 +435,7 @@ export async function normalizeHtmlFile(filePath: string): Promise<Buffer> {
   if (!root || root.tagName !== "html") {
     throw new HtmlNormalizationError("The HTML document root is invalid.");
   }
-  await normalizeElement(root, path.dirname(absolutePath));
+  await normalizeElement(root, path.dirname(absolutePath), resourcePolicy);
 
   const output = Buffer.from(serialize(document), "utf8");
   if (output.byteLength > DOCUMENT_LIMITS.maximumHtmlBytes) {
