@@ -50,7 +50,11 @@ get_ci_affected_areas() {
       tests/e2e/*|config/playwright.*)
         CI_AREAS[browser]=true
         ;;
-      infra/*|docker-compose.yml|.github/*)
+      plugins/*)
+        CI_AREAS[cli]=true
+        CI_AREAS[infrastructure]=true
+        ;;
+      infra/*|docker-compose.yml|.github/*|tests/workflows/*|tests/operations/*)
         CI_AREAS[infrastructure]=true
         ;;
       package.json|package-lock.json|.npmrc|config/*)
