@@ -65,5 +65,14 @@ assert_equal "${CI_AREAS[cli]}" true "Shared CLI fanout"
 get_ci_affected_areas false docs/operations.md
 assert_equal "${CI_AREAS[documentation]}" true "Documentation path detection"
 assert_equal "${CI_AREAS[server]}" false "Documentation skips server"
+get_ci_affected_areas false plugins/yaaps/skills/yaaps/scripts/yaaps.ps1
+assert_equal "${CI_AREAS[cli]}" true "Skill path CLI fanout"
+assert_equal "${CI_AREAS[infrastructure]}" true "Skill path infrastructure fanout"
+assert_equal "${CI_AREAS[server]}" false "Skill path skips server"
+assert_equal "${CI_AREAS[dashboard]}" false "Skill path skips dashboard"
+assert_equal "${CI_AREAS[browser]}" false "Skill path skips browser"
+get_ci_affected_areas false tests/workflows/workflows.sh
+assert_equal "${CI_AREAS[infrastructure]}" true "Workflow test path detection"
+assert_equal "${CI_AREAS[server]}" false "Workflow test path skips server"
 
 printf '%d Bash workflow tests passed.\n' "$PASSED_TESTS"
