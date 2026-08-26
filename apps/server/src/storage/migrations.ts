@@ -327,12 +327,41 @@ const deviceConnections: Migration = {
   },
 };
 
+const draftCategories: Migration = {
+  async up(database) {
+    await database.transaction().execute(async (transaction) => {
+      await transaction.schema
+        .alterTable("drafts")
+        .addColumn("category", "text")
+        .execute();
+      await transaction.schema
+        .createIndex("drafts_owner_category_idx")
+        .on("drafts")
+        .columns(["owner_id", "category"])
+        .execute();
+    });
+  },
+  async down(database) {
+    await database.transaction().execute(async (transaction) => {
+      await transaction.schema
+        .dropIndex("drafts_owner_category_idx")
+        .ifExists()
+        .execute();
+      await transaction.schema
+        .alterTable("drafts")
+        .dropColumn("category")
+        .execute();
+    });
+  },
+};
+
 class YaapsMigrationProvider implements MigrationProvider {
   async getMigrations(): Promise<Record<string, Migration>> {
     return {
       "001_initial_schema": initialSchema,
       "002_authentication_state": authenticationState,
       "003_device_connections": deviceConnections,
+      "004_draft_categories": draftCategories,
     };
   }
 }

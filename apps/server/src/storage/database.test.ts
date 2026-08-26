@@ -56,6 +56,7 @@ describe("database migrations", () => {
         { name: "001_initial_schema" },
         { name: "002_authentication_state" },
         { name: "003_device_connections" },
+        { name: "004_draft_categories" },
       ]);
     } finally {
       await reopened.connection.destroy();
@@ -69,6 +70,7 @@ describe("database migrations", () => {
       database.connection
         .insertInto("drafts")
         .values({
+          category: null,
           created_at: new Date().toISOString(),
           expires_at: new Date(Date.now() + 60_000).toISOString(),
           id: "draft-without-owner",

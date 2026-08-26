@@ -161,6 +161,7 @@ describe("CLI draft ID escaping", () => {
 
 describe("CLI commands with dash-leading draft IDs", () => {
   const summary = {
+    category: null,
     createdAt: "2026-08-26T00:00:00.000Z",
     expiresAt: "2026-08-27T00:00:00.000Z",
     id: dashDraftId,

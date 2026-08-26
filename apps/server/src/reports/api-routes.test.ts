@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  categoryListResponseSchema,
   DOCUMENT_LIMITS,
   draftListResponseSchema,
   draftSummarySchema,
@@ -236,6 +237,171 @@ describe("agent report API", () => {
     ).toBeDefined();
   });
 
+  it("publishes, filters, aggregates, and clears draft categories", async () => {
+    const actor = await identity("Category owner");
+    const publish = async (category: string | undefined, body: string) => {
+      const response = await application.inject({
+        headers: {
+          authorization: actor.authorization,
+          "content-type": "text/html",
+        },
+        method: "POST",
+        payload: html(body),
+        url:
+          category === undefined
+            ? "/api/drafts"
+            : `/api/drafts?category=${encodeURIComponent(category)}`,
+      });
+      expect(response.statusCode).toBe(201);
+      return publishDraftResponseSchema.parse(response.json()).draft;
+    };
+
+    const operations = await publish("Operations", "<p>ops</p>");
+    const alsoOperations = await publish("Operations", "<p>more ops</p>");
+    const uncategorized = await publish(undefined, "<p>no category</p>");
+    expect(operations.category).toBe("Operations");
+    expect(uncategorized.category).toBe(null);
+
+    const versioned = await application.inject({
+      headers: {
+        authorization: actor.authorization,
+        "content-type": "text/html",
+      },
+      method: "POST",
+      payload: html("<p>promoted</p>"),
+      url: `/api/drafts/${uncategorized.id}/versions?category=Reviews`,
+    });
+    expect(versioned.statusCode).toBe(201);
+    expect(
+      publishDraftResponseSchema.parse(versioned.json()).draft.category,
+    ).toBe("Reviews");
+
+    const filtered = await application.inject({
+      headers: { authorization: actor.authorization },
+      method: "GET",
+      url: "/api/drafts?category=Operations",
+    });
+    const filteredList = draftListResponseSchema.parse(filtered.json());
+    expect(filteredList.total).toBe(2);
+    expect(filteredList.items.map((draft) => draft.id).sort()).toEqual(
+      [operations.id, alsoOperations.id].sort(),
+    );
+
+    const categories = await application.inject({
+      headers: { authorization: actor.authorization },
+      method: "GET",
+      url: "/api/categories",
+    });
+    expect(categories.statusCode).toBe(200);
+    expect(categoryListResponseSchema.parse(categories.json())).toEqual({
+      items: [
+        { category: "Operations", draftCount: 2 },
+        { category: "Reviews", draftCount: 1 },
+      ],
+    });
+
+    const recategorized = await application.inject({
+      headers: { authorization: actor.authorization },
+      method: "PATCH",
+      payload: { category: "Archive" },
+      url: `/api/drafts/${operations.id}`,
+    });
+    expect(draftSummarySchema.parse(recategorized.json()).category).toBe(
+      "Archive",
+    );
+
+    const cleared = await application.inject({
+      headers: { authorization: actor.authorization },
+      method: "PATCH",
+      payload: { category: null },
+      url: `/api/drafts/${operations.id}`,
+    });
+    expect(draftSummarySchema.parse(cleared.json()).category).toBe(null);
+
+    const afterClearing = await application.inject({
+      headers: { authorization: actor.authorization },
+      method: "GET",
+      url: "/api/categories",
+    });
+    expect(
+      categoryListResponseSchema
+        .parse(afterClearing.json())
+        .items.map((entry) => entry.category),
+    ).toEqual(["Operations", "Reviews"]);
+
+    const publicResponse = await application.inject({
+      method: "GET",
+      url: `/d/${alsoOperations.id}`,
+    });
+    expect(publicResponse.statusCode).toBe(200);
+    expect(publicResponse.body).not.toContain("Operations");
+  });
+
+  it("keeps categories, filters, and aggregates inside the owner boundary", async () => {
+    const owner = await identity("Category first owner");
+    const other = await identity("Category second owner");
+    const created = await application.inject({
+      headers: {
+        authorization: owner.authorization,
+        "content-type": "text/html",
+      },
+      method: "POST",
+      payload: html("<p>owner report</p>"),
+      url: "/api/drafts?category=Confidential",
+    });
+    const ownerDraft = publishDraftResponseSchema.parse(created.json()).draft;
+    await application.inject({
+      headers: {
+        authorization: other.authorization,
+        "content-type": "text/html",
+      },
+      method: "POST",
+      payload: html("<p>other report</p>"),
+      url: "/api/drafts?category=Public",
+    });
+
+    const foreignFilter = await application.inject({
+      headers: { authorization: other.authorization },
+      method: "GET",
+      url: "/api/drafts?category=Confidential",
+    });
+    expect(draftListResponseSchema.parse(foreignFilter.json())).toMatchObject({
+      items: [],
+      total: 0,
+    });
+
+    const foreignCategories = await application.inject({
+      headers: { authorization: other.authorization },
+      method: "GET",
+      url: "/api/categories",
+    });
+    expect(categoryListResponseSchema.parse(foreignCategories.json())).toEqual({
+      items: [{ category: "Public", draftCount: 1 }],
+    });
+
+    const foreignPatch = await application.inject({
+      headers: { authorization: other.authorization },
+      method: "PATCH",
+      payload: { category: "Stolen" },
+      url: `/api/drafts/${ownerDraft.id}`,
+    });
+    expect(foreignPatch.statusCode).toBe(404);
+    expect(
+      (
+        await application.yaapsData!.drafts.findForOwner(
+          owner.userId,
+          ownerDraft.id,
+        )
+      )?.category,
+    ).toBe("Confidential");
+
+    const anonymousCategories = await application.inject({
+      method: "GET",
+      url: "/api/categories",
+    });
+    expect(anonymousCategories.statusCode).toBe(401);
+  });
+
   it("disables, re-enables, and deletes without leaving report blobs", async () => {
     const actor = await identity("Owner");
     const created = await application.inject({
@@ -342,6 +508,28 @@ describe("agent report API", () => {
     });
     expect(oversized.statusCode).toBe(413);
     expect(oversized.json().error.code).toBe("HTML_TOO_LARGE");
+
+    for (const category of ["", "%20%20", "a".repeat(101), "Two%0Alines"]) {
+      const invalidCategory = await application.inject({
+        headers: {
+          authorization: actor.authorization,
+          "content-type": "text/html",
+        },
+        method: "POST",
+        payload: html("<p>Category</p>"),
+        url: `/api/drafts?category=${category}`,
+      });
+      expect(invalidCategory.statusCode).toBe(400);
+      expect(invalidCategory.json().error.code).toBe("INVALID_REQUEST");
+
+      const invalidFilter = await application.inject({
+        headers: { authorization: actor.authorization },
+        method: "GET",
+        url: `/api/drafts?category=${category}`,
+      });
+      expect(invalidFilter.statusCode).toBe(400);
+      expect(invalidFilter.json().error.code).toBe("INVALID_REQUEST");
+    }
 
     expect(
       await application

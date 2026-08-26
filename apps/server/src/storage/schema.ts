@@ -102,6 +102,7 @@ export interface DeviceConnectionsTable {
 }
 
 export interface DraftsTable {
+  category: string | null;
   created_at: string;
   expires_at: string;
   id: string;

@@ -14,6 +14,13 @@ export const DOCUMENT_LIMITS = {
   maximumHtmlBytes: 10 * 1024 * 1024,
 } as const;
 
+// A category is a plain owner-scoped label: trimmed, printable, compared exactly.
+export const draftCategorySchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(100)
+  .refine((value) => !/\p{Cc}/u.test(value));
 export const draftIdSchema = z.string().regex(/^[A-Za-z0-9_-]{32}$/);
 export const draftStatusSchema = z.enum(["enabled", "disabled"]);
 export const draftTitleSchema = z.string().trim().min(1).max(200);
@@ -22,28 +29,36 @@ export const paginationQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional(),
   offset: z.coerce.number().int().min(0).max(10_000).optional(),
 });
+export const draftListQuerySchema = paginationQuerySchema.extend({
+  category: draftCategorySchema.optional(),
+});
 export const createDraftQuerySchema = z.object({
+  category: draftCategorySchema.optional(),
   title: draftTitleSchema.optional(),
   ttlSeconds: ttlSecondsSchema.optional(),
 });
 export const addDraftVersionQuerySchema = z.object({
+  category: draftCategorySchema.optional(),
   title: draftTitleSchema.optional(),
   ttlSeconds: ttlSecondsSchema.optional(),
 });
 export const updateDraftRequestSchema = z
   .object({
+    category: draftCategorySchema.nullable().optional(),
     status: draftStatusSchema.optional(),
     title: draftTitleSchema.nullable().optional(),
     ttlSeconds: ttlSecondsSchema.optional(),
   })
   .refine(
     (value) =>
+      value.category !== undefined ||
       value.status !== undefined ||
       value.title !== undefined ||
       value.ttlSeconds !== undefined,
   );
 
 export const draftSummarySchema = z.object({
+  category: draftCategorySchema.nullable(),
   createdAt: z.iso.datetime(),
   expiresAt: z.iso.datetime(),
   id: draftIdSchema,
@@ -85,6 +100,13 @@ export const draftVersionListResponseSchema = z.object({
   limit: z.number().int().positive(),
   offset: z.number().int().nonnegative(),
   total: z.number().int().nonnegative(),
+});
+export const categorySummarySchema = z.object({
+  category: draftCategorySchema,
+  draftCount: z.number().int().positive(),
+});
+export const categoryListResponseSchema = z.object({
+  items: z.array(categorySummarySchema),
 });
 
 export const healthResponseSchema = z.object({
@@ -295,6 +317,9 @@ export type CreatedInvitationResponse = z.infer<
 export type ApiKeySummary = z.infer<typeof apiKeySummarySchema>;
 export type AdminUserSummary = z.infer<typeof adminUserSummarySchema>;
 export type AdminDraftSummary = z.infer<typeof adminDraftSummarySchema>;
+export type CategoryListResponse = z.infer<typeof categoryListResponseSchema>;
+export type CategorySummary = z.infer<typeof categorySummarySchema>;
+export type DraftListQuery = z.infer<typeof draftListQuerySchema>;
 export type DraftListResponse = z.infer<typeof draftListResponseSchema>;
 export type DraftStatus = z.infer<typeof draftStatusSchema>;
 export type DraftSummary = z.infer<typeof draftSummarySchema>;

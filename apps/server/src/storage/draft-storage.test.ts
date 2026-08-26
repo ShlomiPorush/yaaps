@@ -114,6 +114,137 @@ describe("owner-scoped draft storage", () => {
     ).rejects.toBeInstanceOf(DraftNotFoundError);
   });
 
+  it("carries a category through creation, versioning, update, and clearing", async () => {
+    const expiresAt = new Date(Date.now() + 60_000).toISOString();
+    const created = await storage.createDraft({
+      category: "Operations",
+      expiresAt,
+      html: html("<p>categorized</p>"),
+      ownerId: "user-first",
+    });
+    expect(
+      (await storage.findForOwner("user-first", created.draftId))?.category,
+    ).toBe("Operations");
+
+    await storage.addVersion({
+      draftId: created.draftId,
+      expiresAt,
+      html: html("<p>category untouched</p>"),
+      ownerId: "user-first",
+    });
+    expect(
+      (await storage.findForOwner("user-first", created.draftId))?.category,
+    ).toBe("Operations");
+
+    await storage.addVersion({
+      category: "Reviews",
+      draftId: created.draftId,
+      expiresAt,
+      html: html("<p>recategorized</p>"),
+      ownerId: "user-first",
+    });
+    expect(
+      (await storage.findForOwner("user-first", created.draftId))?.category,
+    ).toBe("Reviews");
+
+    await expect(
+      storage.updateForOwner({
+        apiKeyId: null,
+        category: "Archive",
+        draftId: created.draftId,
+        ownerId: "user-first",
+      }),
+    ).resolves.toMatchObject({ category: "Archive" });
+    await expect(
+      storage.updateForOwner({
+        apiKeyId: null,
+        category: null,
+        draftId: created.draftId,
+        ownerId: "user-first",
+      }),
+    ).resolves.toMatchObject({ category: null });
+    await expect(
+      storage.updateForOwner({
+        apiKeyId: null,
+        draftId: created.draftId,
+        ownerId: "user-first",
+        status: "disabled",
+      }),
+    ).resolves.toMatchObject({ category: null, status: "disabled" });
+
+    const audited = await database.connection
+      .selectFrom("audit_events")
+      .select("metadata_json")
+      .where("target_id", "=", created.draftId)
+      .where("action", "=", "draft.updated")
+      .orderBy("id")
+      .execute();
+    expect(
+      audited.map(
+        (event) =>
+          (JSON.parse(event.metadata_json) as { categoryChanged: boolean })
+            .categoryChanged,
+      ),
+    ).toEqual([true, true, false]);
+  });
+
+  it("filters and aggregates categories without revealing another owner's labels", async () => {
+    const expiresAt = new Date(Date.now() + 60_000).toISOString();
+    const owned = await Promise.all(
+      [
+        { category: "Operations", body: "<p>ops one</p>" },
+        { category: "Operations", body: "<p>ops two</p>" },
+        { category: "Reviews", body: "<p>review</p>" },
+        { category: null, body: "<p>uncategorized</p>" },
+      ].map((entry) =>
+        storage.createDraft({
+          category: entry.category,
+          expiresAt,
+          html: html(entry.body),
+          ownerId: "user-first",
+        }),
+      ),
+    );
+    await storage.createDraft({
+      category: "Operations",
+      expiresAt,
+      html: html("<p>other owner</p>"),
+      ownerId: "user-second",
+    });
+
+    await expect(storage.listCategoriesForOwner("user-first")).resolves.toEqual(
+      [
+        { category: "Operations", draftCount: 2 },
+        { category: "Reviews", draftCount: 1 },
+      ],
+    );
+    await expect(
+      storage.listCategoriesForOwner("user-second"),
+    ).resolves.toEqual([{ category: "Operations", draftCount: 1 }]);
+
+    const filtered = await storage.listForOwner(
+      "user-first",
+      50,
+      0,
+      "Operations",
+    );
+    expect(filtered.total).toBe(2);
+    expect(filtered.items.map((draft) => draft.id).sort()).toEqual(
+      [owned[0]!.draftId, owned[1]!.draftId].sort(),
+    );
+
+    const otherOwnerFiltered = await storage.listForOwner(
+      "user-second",
+      50,
+      0,
+      "Reviews",
+    );
+    expect(otherOwnerFiltered).toEqual({ items: [], total: 0 });
+    await expect(
+      storage.listForOwner("user-first", 50, 0),
+    ).resolves.toMatchObject({ total: 4 });
+  });
+
   it("removes unreferenced blobs left by an interrupted metadata write", async () => {
     const blobs = new HtmlBlobStore(path.dirname(database.path));
     const orphan = await blobs.store(html("<p>orphan</p>"));

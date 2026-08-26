@@ -1,19 +1,25 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  addDraftVersionQuerySchema,
   apiKeyListResponseSchema,
   browserSessionResponseSchema,
+  categoryListResponseSchema,
   createApiKeyRequestSchema,
   createDeviceConnectionRequestSchema,
   createDeviceConnectionResponseSchema,
+  createDraftQuerySchema,
   createInvitationRequestSchema,
   DOCUMENT_LIMITS,
+  draftCategorySchema,
+  draftListQuerySchema,
   PRODUCT_NAME,
   RETENTION_LIMITS_SECONDS,
   healthResponseSchema,
   publicErrorSchema,
   publicServiceMetadataSchema,
   pollDeviceConnectionResponseSchema,
+  updateDraftRequestSchema,
 } from "./index.js";
 
 describe("public contracts", () => {
@@ -139,6 +145,65 @@ describe("public contracts", () => {
         keyHash: "plaintext-key",
         keyPrefix: "yaaps_too-short",
         label: "Agent",
+      }),
+    ).toThrow();
+  });
+});
+
+describe("draft category contracts", () => {
+  it("trims accepted category labels and rejects unusable values", () => {
+    expect(draftCategorySchema.parse("  Quarterly reviews  ")).toBe(
+      "Quarterly reviews",
+    );
+    expect(draftCategorySchema.parse("a".repeat(100))).toHaveLength(100);
+    for (const invalid of [
+      "",
+      "   ",
+      "a".repeat(101),
+      "Two\nlines",
+      "Alarm\u0007",
+    ]) {
+      expect(() => draftCategorySchema.parse(invalid)).toThrow();
+    }
+  });
+
+  it("carries the category through publish, version, and list queries", () => {
+    expect(
+      createDraftQuerySchema.parse({ category: " Ops ", ttlSeconds: "3600" }),
+    ).toEqual({ category: "Ops", ttlSeconds: 3600 });
+    expect(addDraftVersionQuerySchema.parse({ category: "Ops" })).toEqual({
+      category: "Ops",
+    });
+    expect(createDraftQuerySchema.parse({})).toEqual({});
+    expect(
+      draftListQuerySchema.parse({ category: "Ops", limit: "10" }),
+    ).toEqual({ category: "Ops", limit: 10 });
+    expect(() => draftListQuerySchema.parse({ category: "" })).toThrow();
+  });
+
+  it("accepts clearing a category but still rejects an empty update", () => {
+    expect(updateDraftRequestSchema.parse({ category: null })).toEqual({
+      category: null,
+    });
+    expect(updateDraftRequestSchema.parse({ category: " Ops " })).toEqual({
+      category: "Ops",
+    });
+    expect(() => updateDraftRequestSchema.parse({})).toThrow();
+    expect(() => updateDraftRequestSchema.parse({ category: "  " })).toThrow();
+  });
+
+  it("describes an owner's categories with positive draft counts", () => {
+    expect(
+      categoryListResponseSchema.parse({
+        items: [
+          { category: "Ops", draftCount: 2 },
+          { category: "Reviews", draftCount: 1 },
+        ],
+      }).items,
+    ).toHaveLength(2);
+    expect(() =>
+      categoryListResponseSchema.parse({
+        items: [{ category: "Ops", draftCount: 0 }],
       }),
     ).toThrow();
   });

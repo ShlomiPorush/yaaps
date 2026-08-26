@@ -1,5 +1,6 @@
 import {
   draftIdSchema,
+  draftListQuerySchema,
   paginationQuerySchema,
   type RetentionPolicy,
   updateDraftRequestSchema,
@@ -63,15 +64,21 @@ export async function registerDashboardManagementRoutes(
     return actor;
   };
 
+  application.get("/dashboard/api/categories", async (request) => {
+    const actor = await session(request);
+    return { items: await options.drafts.listCategoriesForOwner(actor.userId) };
+  });
+
   application.get("/dashboard/api/drafts", async (request) => {
     const actor = await session(request);
-    const query = paginationQuerySchema.parse(request.query);
+    const query = draftListQuerySchema.parse(request.query);
     const limit = query.limit ?? 50;
     const offset = query.offset ?? 0;
     const result = await options.drafts.listForOwner(
       actor.userId,
       limit,
       offset,
+      query.category,
     );
     return {
       items: result.items.map((draft) => draftSummary(publicOrigin, draft)),
@@ -114,6 +121,7 @@ export async function registerDashboardManagementRoutes(
       publicOrigin,
       await options.drafts.updateForOwner({
         apiKeyId: null,
+        category: update.category,
         draftId,
         // A new TTL always counts from now, mirroring publish semantics.
         expiresAt:

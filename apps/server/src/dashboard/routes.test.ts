@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  categoryListResponseSchema,
   draftListResponseSchema,
   draftSummarySchema,
   publicErrorSchema,
@@ -81,6 +82,7 @@ describe("dashboard report management boundary", () => {
     const adminCookies = await signIn(application, adminId);
     const userCookies = await signIn(application, userId);
     const memberDraft = await application.yaapsData!.drafts.createDraft({
+      category: "Member operations",
       expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
       html: Buffer.from(
         "<!doctype html><html><head><title>Member</title></head><body>Member report</body></html>",
@@ -119,6 +121,7 @@ describe("dashboard report management boundary", () => {
     expect(adminDrafts.json()).toMatchObject({
       items: [
         {
+          category: "Member operations",
           id: memberDraft.draftId,
           ownerDisplayName: "Member",
           ownerId: userId,
@@ -345,6 +348,135 @@ describe("dashboard report management boundary", () => {
         actor_user_id: ownerId,
       },
     ]);
+    await application.close();
+  });
+
+  it("scopes the category filter, aggregation, and editor to the signed-in user", async () => {
+    const application = await buildApplication({
+      dataDirectory: await temporaryDirectory(),
+      publicOrigin: "https://share.example.test",
+    });
+    const repository = application.yaapsData!.authentication;
+    const ownerId = await repository.createUser({
+      displayName: "Category owner",
+      role: "user",
+    });
+    const otherId = await repository.createUser({
+      displayName: "Category other",
+      role: "user",
+    });
+    const ownerCookies = await signIn(application, ownerId);
+    const otherCookies = await signIn(application, otherId);
+    const report = (label: string) =>
+      Buffer.from(
+        `<!doctype html><html><head><title>${label}</title></head><body>${label}</body></html>`,
+      );
+    const store = (owner: string, category: string | null, label: string) =>
+      application.yaapsData!.drafts.createDraft({
+        category,
+        expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+        html: report(label),
+        ownerId: owner,
+        title: label,
+        uploadedByApiKeyId: null,
+      });
+    const categorized = await store(ownerId, "Operations", "Owner ops");
+    await store(ownerId, null, "Owner unfiled");
+    await store(otherId, "Operations", "Other ops");
+
+    const filtered = await application.inject({
+      headers: browserHeaders(ownerCookies),
+      method: "GET",
+      url: "/dashboard/api/drafts?category=Operations",
+    });
+    expect(draftListResponseSchema.parse(filtered.json())).toMatchObject({
+      items: [{ category: "Operations", id: categorized.draftId }],
+      total: 1,
+    });
+
+    const ownerCategories = await application.inject({
+      headers: browserHeaders(ownerCookies),
+      method: "GET",
+      url: "/dashboard/api/categories",
+    });
+    expect(categoryListResponseSchema.parse(ownerCategories.json())).toEqual({
+      items: [{ category: "Operations", draftCount: 1 }],
+    });
+
+    const invalidFilter = await application.inject({
+      headers: browserHeaders(ownerCookies),
+      method: "GET",
+      url: "/dashboard/api/drafts?category=",
+    });
+    expect(invalidFilter.statusCode).toBe(400);
+    expect(publicErrorSchema.parse(invalidFilter.json()).error.code).toBe(
+      "INVALID_REQUEST",
+    );
+
+    const foreignPatch = await application.inject({
+      headers: browserHeaders(otherCookies, true),
+      method: "PATCH",
+      payload: { category: "Stolen" },
+      url: `/dashboard/api/drafts/${categorized.draftId}`,
+    });
+    expect(foreignPatch.statusCode).toBe(404);
+
+    const updated = await application.inject({
+      headers: browserHeaders(ownerCookies, true),
+      method: "PATCH",
+      payload: { category: "Reviews" },
+      url: `/dashboard/api/drafts/${categorized.draftId}`,
+    });
+    expect(draftSummarySchema.parse(updated.json()).category).toBe("Reviews");
+
+    const cleared = await application.inject({
+      headers: browserHeaders(ownerCookies, true),
+      method: "PATCH",
+      payload: { category: null },
+      url: `/dashboard/api/drafts/${categorized.draftId}`,
+    });
+    expect(draftSummarySchema.parse(cleared.json()).category).toBe(null);
+    expect(
+      categoryListResponseSchema.parse(
+        (
+          await application.inject({
+            headers: browserHeaders(ownerCookies),
+            method: "GET",
+            url: "/dashboard/api/categories",
+          })
+        ).json(),
+      ),
+    ).toEqual({ items: [] });
+
+    const otherCategories = await application.inject({
+      headers: browserHeaders(otherCookies),
+      method: "GET",
+      url: "/dashboard/api/categories",
+    });
+    expect(categoryListResponseSchema.parse(otherCategories.json())).toEqual({
+      items: [{ category: "Operations", draftCount: 1 }],
+    });
+
+    const categoryAudit = await application
+      .yaapsData!.database.connection.selectFrom("audit_events")
+      .select("metadata_json")
+      .where("target_id", "=", categorized.draftId)
+      .where("action", "=", "draft.updated")
+      .orderBy("id")
+      .execute();
+    expect(
+      categoryAudit.map(
+        (event) =>
+          (JSON.parse(event.metadata_json) as { categoryChanged: boolean })
+            .categoryChanged,
+      ),
+    ).toEqual([true, true]);
+
+    const anonymous = await application.inject({
+      method: "GET",
+      url: "/dashboard/api/categories",
+    });
+    expect(anonymous.statusCode).toBe(401);
     await application.close();
   });
 
