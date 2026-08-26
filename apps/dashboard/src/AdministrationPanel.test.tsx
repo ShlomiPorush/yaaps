@@ -80,6 +80,64 @@ describe("dashboard administration panel", () => {
     expect(invitationCode.closest(".one-time-key")).not.toHaveAttribute("dir");
   });
 
+  it("shows the category of a report without offering to change it", async () => {
+    const category = "Weekly reports";
+    const fetchImplementation = vi.fn<typeof fetch>(async (input, init) => {
+      const url = String(input);
+      if (url === "/dashboard/api/admin/users" && !init?.method) {
+        return json({ items: [] });
+      }
+      if (url === "/dashboard/api/admin/invitations" && !init?.method) {
+        return json({ items: [] });
+      }
+      if (url.startsWith("/dashboard/api/admin/drafts?") && !init?.method) {
+        return json({
+          items: [
+            {
+              category,
+              createdAt: "2026-08-24T08:00:00.000Z",
+              expiresAt: "2026-08-31T08:00:00.000Z",
+              id: "abcdefghijabcdefghijabcdefghijab",
+              latestVersionNumber: 2,
+              ownerDisplayName: "Member",
+              ownerId: memberId,
+              publicUrl:
+                "https://share.example.test/d/abcdefghijabcdefghijabcdefghijab",
+              status: "enabled",
+              title: "Quarterly report",
+              updatedAt: "2026-08-24T09:00:00.000Z",
+            },
+          ],
+        });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    const { container } = render(
+      <AdministrationPanel
+        copy={localeDocuments.en}
+        currentUserId={adminId}
+        fetchImplementation={fetchImplementation}
+        locale="en"
+      />,
+    );
+
+    await screen.findByText("Quarterly report");
+    const chip = container.querySelector(".category-chip");
+    expect(chip).toHaveTextContent(category);
+    expect(chip?.closest(".admin-row")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", {
+        name: localeDocuments.en.management.categoryEdit,
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", {
+        name: localeDocuments.en.management.categoryClear,
+      }),
+    ).not.toBeInTheDocument();
+  });
+
   it("creates one-time invitations and disables users with confirmation", async () => {
     document.cookie = "yaaps_csrf=csrf-token; Path=/";
     let invitationCreated = false;

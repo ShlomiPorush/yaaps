@@ -86,6 +86,8 @@ const DRAFT_ID_OPERAND = /^-[A-Za-z0-9_-]{31}$/;
 // with "-", which commander would reject as an unknown option. Commander has
 // no operand escape besides "--", so the raw argv is rewritten to hoist such
 // IDs behind one terminator while option values stay attached to their flags.
+// Every later operand is hoisted too, so a command taking more than one
+// operand keeps them in the order the user typed.
 export function escapeDraftIdOperands(
   program: Command,
   argv: readonly string[],
@@ -122,7 +124,11 @@ export function escapeDraftIdOperands(
       }
       continue;
     }
-    (DRAFT_ID_OPERAND.test(token) ? hoisted : kept).push(token);
+    if (DRAFT_ID_OPERAND.test(token)) {
+      hoisted.push(token);
+      continue;
+    }
+    (hoisted.length > 0 && !token.startsWith("-") ? hoisted : kept).push(token);
   }
   if (hoisted.length === 0 && terminator === -1) {
     return [...argv];
@@ -390,6 +396,7 @@ export function createProgram(dependencies: ProgramDependencies = {}): Command {
     program
       .command("publish <file>")
       .description("Normalize and publish one self-contained HTML report.")
+      .option("--category <name>", "Set or update the report category")
       .option("--draft-id <id>", "Publish a version to an explicit draft")
       .option("--new-draft", "Create a new draft and replace the local mapping")
       .option("--title <title>", "Set or update the report title")
@@ -403,6 +410,7 @@ export function createProgram(dependencies: ProgramDependencies = {}): Command {
     async (
       file: string,
       options: CredentialOptions & {
+        category?: string;
         draftId?: string;
         json?: boolean;
         newDraft?: boolean;
@@ -434,6 +442,7 @@ export function createProgram(dependencies: ProgramDependencies = {}): Command {
         const result = await publishReport(
           credentials,
           {
+            category: options.category,
             draftId,
             html: await normalizeHtmlFile(filePath),
             title: options.title,
@@ -458,6 +467,7 @@ export function createProgram(dependencies: ProgramDependencies = {}): Command {
     program
       .command("list")
       .description("List drafts owned by the configured user.")
+      .option("--category <name>", "Show only drafts in this exact category")
       .option(
         "--limit <number>",
         "Maximum rows",
@@ -474,6 +484,7 @@ export function createProgram(dependencies: ProgramDependencies = {}): Command {
   ).action(
     async (
       options: CredentialOptions & {
+        category?: string;
         json?: boolean;
         limit: number;
         offset: number;
@@ -483,7 +494,11 @@ export function createProgram(dependencies: ProgramDependencies = {}): Command {
         const config = await readCliConfig(configDirectory);
         const result = await listDrafts(
           credentialsFrom(options, environment, config),
-          { limit: options.limit, offset: options.offset },
+          {
+            category: options.category,
+            limit: options.limit,
+            offset: options.offset,
+          },
           fetchImplementation,
         );
         writeOutput(
@@ -494,7 +509,7 @@ export function createProgram(dependencies: ProgramDependencies = {}): Command {
               : result.items
                   .map(
                     (draft) =>
-                      `${draft.id}  ${draft.status}  v${draft.latestVersionNumber}  ${draft.title ?? "Untitled"}  ${draft.publicUrl}`,
+                      `${draft.id}  ${draft.status}  v${draft.latestVersionNumber}  ${draft.title ?? "Untitled"}  ${draft.category ?? "Uncategorized"}  ${draft.publicUrl}`,
                   )
                   .join("\n"),
         );
@@ -530,6 +545,40 @@ export function createProgram(dependencies: ProgramDependencies = {}): Command {
           options.json
             ? JSON.stringify(result, null, 2)
             : `${draft.id}  ${draft.status}  ${draft.title ?? "Untitled"}\n${draft.publicUrl}\n${versions.total} versions; latest v${draft.latestVersionNumber}.`,
+        );
+      });
+    },
+  );
+
+  addCredentialOptions(
+    program
+      .command("categorize <draft-id> [category]")
+      .description("Group a draft under a category, or clear its category.")
+      .option("--clear", "Remove the draft from its category"),
+  ).action(
+    async (
+      draftId: string,
+      category: string | undefined,
+      options: CredentialOptions & { clear?: boolean },
+    ) => {
+      await run("YAAPS categorize", async () => {
+        if (options.clear && category !== undefined) {
+          throw new Error("A category and --clear cannot be used together.");
+        }
+        if (!options.clear && category === undefined) {
+          throw new Error("Provide a category or --clear.");
+        }
+        const config = await readCliConfig(configDirectory);
+        const result = await updateDraft(
+          credentialsFrom(options, environment, config),
+          requireDraftId(draftId),
+          { category: options.clear ? null : category },
+          fetchImplementation,
+        );
+        writeOutput(
+          result.category === null
+            ? `${result.id} is now uncategorized.`
+            : `${result.id} is now in ${result.category}.`,
         );
       });
     },

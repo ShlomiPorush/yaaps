@@ -173,4 +173,175 @@ describe("CLI publishing against a disposable server", () => {
     ).toEqual([]);
     expect(await application.yaapsData!.blobs.listKeys()).toEqual([]);
   });
+
+  it("publishes, filters, and edits categories", async () => {
+    const dataDirectory = await temporaryDirectory(
+      "yaaps-cli-category-server-",
+    );
+    const configDirectory = await temporaryDirectory(
+      "yaaps-cli-category-user-",
+    );
+    const workingDirectory = await temporaryDirectory(
+      "yaaps-cli-category-work-",
+    );
+    const application = await buildApplication({
+      dataDirectory,
+      publicOrigin: "https://share.example.test",
+    });
+    applications.push(application);
+    const address = await application.listen({ host: "127.0.0.1", port: 0 });
+    const userId = await application.yaapsData!.authentication.createUser({
+      displayName: "Category owner",
+      role: "user",
+    });
+    const apiKey = await application.yaapsData!.authentication.createApiKey(
+      userId,
+      "Category integration",
+    );
+    const document = (heading: string) =>
+      `<!doctype html><html lang="en"><head><title>${heading}</title></head><body><h1>${heading}</h1></body></html>`;
+    await writeFile(
+      path.join(workingDirectory, "sales.html"),
+      document("Sales"),
+      "utf8",
+    );
+    await writeFile(
+      path.join(workingDirectory, "other.html"),
+      document("Other"),
+      "utf8",
+    );
+
+    const run = async (arguments_: string[]) => {
+      const output: string[] = [];
+      const errors: string[] = [];
+      const program = createProgram({
+        configDirectory,
+        environment: {},
+        workingDirectory,
+        writeError: (message) => errors.push(message),
+        writeOutput: (message) => output.push(message),
+      });
+      process.exitCode = undefined;
+      await program.parseAsync(["node", "yaaps", ...arguments_]);
+      return { errors, output };
+    };
+    const storedCategory = async (draftId: string) =>
+      (
+        await application
+          .yaapsData!.database.connection.selectFrom("drafts")
+          .select("category")
+          .where("id", "=", draftId)
+          .executeTakeFirstOrThrow()
+      ).category;
+
+    expect(
+      (
+        await run([
+          "config",
+          "set",
+          "--api-url",
+          address,
+          "--api-key",
+          apiKey.key,
+        ])
+      ).errors,
+    ).toEqual([]);
+
+    const published = await run([
+      "publish",
+      "sales.html",
+      "--title",
+      "Sales report",
+      "--category",
+      "Sales & Growth",
+      "--json",
+    ]);
+    expect(published.errors).toEqual([]);
+    const categorized = JSON.parse(published.output[0] ?? "{}") as {
+      draft: { category: string | null; id: string };
+    };
+    expect(categorized.draft.category).toBe("Sales & Growth");
+
+    const other = await run([
+      "publish",
+      "other.html",
+      "--title",
+      "Other report",
+      "--json",
+    ]);
+    expect(other.errors).toEqual([]);
+    const uncategorized = JSON.parse(other.output[0] ?? "{}") as {
+      draft: { category: string | null; id: string };
+    };
+    expect(uncategorized.draft.category).toBeNull();
+
+    const versioned = await run([
+      "publish",
+      "sales.html",
+      "--category",
+      "Renamed group",
+      "--json",
+    ]);
+    expect(versioned.errors).toEqual([]);
+    expect(
+      (
+        JSON.parse(versioned.output[0] ?? "{}") as {
+          draft: { category: string | null };
+          version: { versionNumber: number };
+        }
+      ).draft,
+    ).toMatchObject({ category: "Renamed group" });
+    expect(await storedCategory(categorized.draft.id)).toBe("Renamed group");
+
+    const filtered = await run([
+      "list",
+      "--category",
+      "Renamed group",
+      "--json",
+    ]);
+    expect(filtered.errors).toEqual([]);
+    expect(JSON.parse(filtered.output[0] ?? "{}")).toMatchObject({
+      items: [{ category: "Renamed group", id: categorized.draft.id }],
+      total: 1,
+    });
+
+    const empty = await run(["list", "--category", "renamed group"]);
+    expect(empty.errors).toEqual([]);
+    expect(empty.output).toEqual(["No drafts found."]);
+
+    const unfiltered = await run(["list"]);
+    expect(unfiltered.errors).toEqual([]);
+    expect(unfiltered.output.join("\n")).toContain("Uncategorized");
+
+    const set = await run([
+      "categorize",
+      uncategorized.draft.id,
+      "Renamed group",
+    ]);
+    expect(set.errors).toEqual([]);
+    expect(set.output).toEqual([
+      `${uncategorized.draft.id} is now in Renamed group.`,
+    ]);
+    expect(await storedCategory(uncategorized.draft.id)).toBe("Renamed group");
+
+    const cleared = await run([
+      "categorize",
+      uncategorized.draft.id,
+      "--clear",
+    ]);
+    expect(cleared.errors).toEqual([]);
+    expect(cleared.output).toEqual([
+      `${uncategorized.draft.id} is now uncategorized.`,
+    ]);
+    expect(await storedCategory(uncategorized.draft.id)).toBeNull();
+
+    const rejected = await run([
+      "categorize",
+      uncategorized.draft.id,
+      " ".repeat(2),
+    ]);
+    expect(rejected.errors.join("\n")).toContain("YAAPS categorize failed:");
+    expect(process.exitCode).toBe(1);
+    expect(await storedCategory(uncategorized.draft.id)).toBeNull();
+  });
 });

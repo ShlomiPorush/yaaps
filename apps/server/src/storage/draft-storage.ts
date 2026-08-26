@@ -15,6 +15,7 @@ export class DraftNotFoundError extends Error {
 }
 
 export interface CreateDraftInput {
+  category?: string | null;
   expiresAt: string;
   html: Uint8Array;
   ownerId: string;
@@ -23,12 +24,18 @@ export interface CreateDraftInput {
 }
 
 export interface AddVersionInput {
+  category?: string;
   draftId: string;
   expiresAt: string;
   html: Uint8Array;
   ownerId: string;
   title?: string;
   uploadedByApiKeyId?: string | null;
+}
+
+export interface OwnerCategory {
+  category: string;
+  draftCount: number;
 }
 
 export interface StoredDraftVersion {
@@ -125,6 +132,7 @@ export class DraftStorage {
         await transaction
           .insertInto("drafts")
           .values({
+            category: input.category ?? null,
             created_at: createdAt,
             expires_at: input.expiresAt,
             id: draftId,
@@ -194,6 +202,9 @@ export class DraftStorage {
         await transaction
           .updateTable("drafts")
           .set({
+            ...(input.category === undefined
+              ? {}
+              : { category: input.category }),
             expires_at: input.expiresAt,
             latest_version_number: versionNumber,
             ...(input.title === undefined ? {} : { title: input.title }),
@@ -238,12 +249,17 @@ export class DraftStorage {
     ownerId: string,
     limit: number,
     offset: number,
+    category?: string,
   ): Promise<PaginatedDrafts> {
     const [items, count] = await Promise.all([
       this.database
         .selectFrom("drafts")
         .selectAll()
+        // The owner predicate is unconditional; the category only narrows it.
         .where("owner_id", "=", ownerId)
+        .$if(category !== undefined, (builder) =>
+          builder.where("category", "=", category!),
+        )
         .orderBy("updated_at", "desc")
         .orderBy("id", "desc")
         .limit(limit)
@@ -253,9 +269,28 @@ export class DraftStorage {
         .selectFrom("drafts")
         .select(({ fn }) => fn.countAll<number>().as("count"))
         .where("owner_id", "=", ownerId)
+        .$if(category !== undefined, (builder) =>
+          builder.where("category", "=", category!),
+        )
         .executeTakeFirstOrThrow(),
     ]);
     return { items, total: Number(count.count) };
+  }
+
+  async listCategoriesForOwner(ownerId: string): Promise<OwnerCategory[]> {
+    const rows = await this.database
+      .selectFrom("drafts")
+      .select(({ fn }) => ["category", fn.countAll<number>().as("draft_count")])
+      .where("owner_id", "=", ownerId)
+      .where("category", "is not", null)
+      .groupBy("category")
+      .orderBy("category", "asc")
+      .execute();
+    return rows.flatMap((row) =>
+      row.category === null
+        ? []
+        : [{ category: row.category, draftCount: Number(row.draft_count) }],
+    );
   }
 
   async listForAdmin(
@@ -326,6 +361,7 @@ export class DraftStorage {
 
   async updateForOwner(input: {
     apiKeyId: string | null;
+    category?: string | null;
     draftId: string;
     expiresAt?: string;
     ownerId: string;
@@ -336,11 +372,15 @@ export class DraftStorage {
       const updatedAt = new Date().toISOString();
       return this.database.transaction().execute(async (transaction) => {
         const changes: {
+          category?: string | null;
           expires_at?: string;
           status?: DraftsTable["status"];
           title?: string | null;
           updated_at: string;
         } = { updated_at: updatedAt };
+        if (input.category !== undefined) {
+          changes.category = input.category;
+        }
         if (input.expiresAt !== undefined) {
           changes.expires_at = input.expiresAt;
         }
@@ -364,6 +404,7 @@ export class DraftStorage {
           action: "draft.updated",
           apiKeyId: input.apiKeyId,
           metadata: {
+            categoryChanged: input.category !== undefined,
             expiryChanged: input.expiresAt !== undefined,
             status: input.status,
             titleChanged: input.title !== undefined,

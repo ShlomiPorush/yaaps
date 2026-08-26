@@ -243,14 +243,15 @@ try {
             Write-Json ([ordered]@{ health = $health; readiness = $readiness })
         }
         'publish' {
-            $options = Parse-Options $CommandArguments @() @('draft-id', 'title', 'ttl')
-            if ($options.Positionals.Count -ne 1) { Fail 'Usage: publish <html-file> [--draft-id <id>] [--title <title>] [--ttl <seconds>]' }
+            $options = Parse-Options $CommandArguments @() @('category', 'draft-id', 'title', 'ttl')
+            if ($options.Positionals.Count -ne 1) { Fail 'Usage: publish <html-file> [--category <name>] [--draft-id <id>] [--title <title>] [--ttl <seconds>]' }
             $file = [IO.Path]::GetFullPath([string]$options.Positionals[0])
             if (-not [IO.File]::Exists($file)) { Fail 'The HTML file does not exist.' }
             $credentials = Get-Credentials
             $route = '/api/drafts'
             if ($options.ContainsKey('draft-id')) { $route += '/' + (Assert-DraftId $options.'draft-id') + '/versions' }
             $query = [System.Collections.ArrayList]@()
+            if ($options.ContainsKey('category')) { [void]$query.Add('category=' + (Encode $options.category)) }
             if ($options.ContainsKey('title')) { [void]$query.Add('title=' + (Encode $options.title)) }
             if ($options.ContainsKey('ttl')) {
                 $ttl = 0
@@ -261,11 +262,13 @@ try {
             Write-Json (Invoke-Request 'Post' ($credentials.ApiUrl + $route) $credentials.ApiKey $null $file)
         }
         'list' {
-            $options = Parse-Options $CommandArguments @() @('limit', 'offset')
+            $options = Parse-Options $CommandArguments @() @('category', 'limit', 'offset')
             $limit = if ($options.ContainsKey('limit')) { [int]$options.limit } else { 50 }
             $offset = if ($options.ContainsKey('offset')) { [int]$options.offset } else { 0 }
+            $route = "/api/drafts?limit=$limit&offset=$offset"
+            if ($options.ContainsKey('category')) { $route += '&category=' + (Encode $options.category) }
             $credentials = Get-Credentials
-            Write-Json (Invoke-Request 'Get' ($credentials.ApiUrl + "/api/drafts?limit=$limit&offset=$offset") $credentials.ApiKey $null '')
+            Write-Json (Invoke-Request 'Get' ($credentials.ApiUrl + $route) $credentials.ApiKey $null '')
         }
         'inspect' {
             $options = Parse-Options $CommandArguments @() @()
@@ -275,6 +278,20 @@ try {
             $draft = Invoke-Request 'Get' ($credentials.ApiUrl + "/api/drafts/$id") $credentials.ApiKey $null ''
             $versions = Invoke-Request 'Get' ($credentials.ApiUrl + "/api/drafts/$id/versions?limit=100&offset=0") $credentials.ApiKey $null ''
             Write-Json ([ordered]@{ draft = $draft; versions = $versions })
+        }
+        'categorize' {
+            $options = Parse-Options $CommandArguments @('clear') @()
+            if ($options.Positionals.Count -lt 1 -or $options.Positionals.Count -gt 2) {
+                Fail 'Usage: categorize <draft-id> <category> | categorize <draft-id> --clear'
+            }
+            $id = Assert-DraftId $options.Positionals[0]
+            $clear = $options.ContainsKey('clear')
+            $hasCategory = $options.Positionals.Count -eq 2
+            if ($clear -and $hasCategory) { Fail 'A category and --clear cannot be used together.' }
+            if (-not $clear -and -not $hasCategory) { Fail 'Provide a category or --clear.' }
+            $body = if ($clear) { @{ category = $null } } else { @{ category = [string]$options.Positionals[1] } }
+            $credentials = Get-Credentials
+            Write-Json (Invoke-Request 'Patch' ($credentials.ApiUrl + "/api/drafts/$id") $credentials.ApiKey $body '')
         }
         { $_ -eq 'disable' -or $_ -eq 'enable' } {
             $options = Parse-Options $CommandArguments @() @()
@@ -293,7 +310,7 @@ try {
             [void](Invoke-Request 'Delete' ($credentials.ApiUrl + "/api/drafts/$id") $credentials.ApiKey $null '')
             Write-Json ([ordered]@{ deleted = $id })
         }
-        default { Fail 'Unknown command. Use connect, config show, status, publish, list, inspect, disable, enable, or delete.' }
+        default { Fail 'Unknown command. Use connect, config show, status, publish, list, inspect, categorize, disable, enable, or delete.' }
     }
 } catch {
     Fail $_.Exception.Message

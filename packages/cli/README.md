@@ -36,13 +36,23 @@ yaaps publish ./report.html --title "Weekly report"
 
 Publishing the same local file again creates a new immutable version under its mapped draft. Use `--new-draft` to deliberately replace that mapping.
 
+Add `--category` to group related reports under one label. Publishing a new version with `--category` updates the stored category:
+
+```sh
+yaaps publish ./report.html --title "Weekly report" --category "Sales"
+yaaps list --category "Sales"
+```
+
 Management commands include:
 
 ```sh
 yaaps status
 yaaps connect --label "My agent"
 yaaps list
+yaaps list --category "Sales"
 yaaps inspect <draft-id>
+yaaps categorize <draft-id> "Sales"
+yaaps categorize <draft-id> --clear
 yaaps disable <draft-id>
 yaaps enable <draft-id>
 yaaps delete <draft-id> --confirm <draft-id>

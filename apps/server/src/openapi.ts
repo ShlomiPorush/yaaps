@@ -1,4 +1,5 @@
 import {
+  categoryListResponseSchema,
   createDeviceConnectionRequestSchema,
   createDeviceConnectionResponseSchema,
   DOCUMENT_LIMITS,
@@ -41,6 +42,21 @@ const versionParameter = {
   name: "version",
   required: true,
   schema: { minimum: 1, type: "integer" },
+};
+
+const categoryParameter = {
+  description:
+    "An optional owner-scoped label, up to 100 characters, compared exactly.",
+  in: "query",
+  name: "category",
+  required: false,
+  schema: { maxLength: 100, minLength: 1, type: "string" },
+};
+
+const categoryFilterParameter = {
+  ...categoryParameter,
+  description:
+    "Return only drafts whose category matches this value exactly. Omit for every draft.",
 };
 
 const titleParameter = {
@@ -259,10 +275,30 @@ export function createOpenApiDocument(options: {
           tags: ["Service"],
         },
       },
+      "/api/categories": {
+        get: {
+          operationId: "listCategories",
+          responses: {
+            "200": {
+              content: {
+                "application/json": { schema: reference("CategoryList") },
+              },
+              description:
+                "Every distinct category on the API key user's drafts, with draft counts.",
+            },
+            "401": errorResponse(
+              "The API key is missing, invalid, or revoked.",
+            ),
+          },
+          security: bearerSecurity,
+          summary: "List categories",
+          tags: ["Drafts"],
+        },
+      },
       "/api/drafts": {
         get: {
           operationId: "listDrafts",
-          parameters: paginationParameters,
+          parameters: [categoryFilterParameter, ...paginationParameters],
           responses: {
             "200": {
               content: {
@@ -280,7 +316,7 @@ export function createOpenApiDocument(options: {
         },
         post: {
           operationId: "createDraft",
-          parameters: [titleParameter, ttl],
+          parameters: [categoryParameter, titleParameter, ttl],
           requestBody: htmlRequestBody,
           responses: publishResponses,
           security: bearerSecurity,
@@ -341,7 +377,7 @@ export function createOpenApiDocument(options: {
             "404": errorResponse("The draft does not exist for this owner."),
           },
           security: bearerSecurity,
-          summary: "Update title or availability",
+          summary: "Update category, title, or availability",
           tags: ["Drafts"],
         },
       },
@@ -367,7 +403,12 @@ export function createOpenApiDocument(options: {
         },
         post: {
           operationId: "addDraftVersion",
-          parameters: [draftIdParameter, titleParameter, ttl],
+          parameters: [
+            draftIdParameter,
+            categoryParameter,
+            titleParameter,
+            ttl,
+          ],
           requestBody: htmlRequestBody,
           responses: publishResponses,
           security: bearerSecurity,
@@ -412,6 +453,7 @@ export function createOpenApiDocument(options: {
     },
     components: {
       schemas: {
+        CategoryList: schema(categoryListResponseSchema),
         CreateDeviceConnectionRequest: schema(
           createDeviceConnectionRequestSchema,
         ),

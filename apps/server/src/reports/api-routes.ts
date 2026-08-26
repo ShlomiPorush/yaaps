@@ -3,6 +3,7 @@ import {
   addDraftVersionQuerySchema,
   createDraftQuerySchema,
   draftIdSchema,
+  draftListQuerySchema,
   paginationQuerySchema,
   updateDraftRequestSchema,
   type DraftSummary,
@@ -70,6 +71,7 @@ function canonicalUrl(origin: string, draftId: string): string {
 
 export function draftSummary(origin: string, draft: DraftsTable): DraftSummary {
   return {
+    category: draft.category,
     createdAt: draft.created_at,
     expiresAt: draft.expires_at,
     id: draft.id,
@@ -159,6 +161,7 @@ export async function registerReportApiRoutes(
           const actor = principal(request);
           const query = createDraftQuerySchema.parse(request.query);
           const stored = await options.drafts.createDraft({
+            category: query.category,
             expiresAt: expiration(
               selectedTtl(query.ttlSeconds, options.retention),
             ),
@@ -192,6 +195,7 @@ export async function registerReportApiRoutes(
           const { draftId } = draftParametersSchema.parse(request.params);
           const query = addDraftVersionQuerySchema.parse(request.query);
           const stored = await options.drafts.addVersion({
+            category: query.category,
             draftId,
             expiresAt: expiration(
               selectedTtl(query.ttlSeconds, options.retention),
@@ -215,15 +219,23 @@ export async function registerReportApiRoutes(
         },
       );
 
+      api.get("/categories", async (request) => {
+        const actor = principal(request);
+        return {
+          items: await options.drafts.listCategoriesForOwner(actor.userId),
+        };
+      });
+
       api.get("/drafts", async (request) => {
         const actor = principal(request);
-        const query = paginationQuerySchema.parse(request.query);
+        const query = draftListQuerySchema.parse(request.query);
         const limit = query.limit ?? 50;
         const offset = query.offset ?? 0;
         const result = await options.drafts.listForOwner(
           actor.userId,
           limit,
           offset,
+          query.category,
         );
         return {
           items: result.items.map((draft) => draftSummary(publicOrigin, draft)),
@@ -273,6 +285,7 @@ export async function registerReportApiRoutes(
           publicOrigin,
           await options.drafts.updateForOwner({
             apiKeyId: actor.apiKeyId,
+            category: update.category,
             draftId,
             // A new TTL always counts from now, mirroring publish semantics.
             expiresAt:

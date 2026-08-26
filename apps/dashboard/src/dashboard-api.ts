@@ -4,6 +4,7 @@ import type {
   ApiKeyListResponse,
   ApiKeySummary,
   ApproveDeviceConnectionResponse,
+  CategoryListResponse,
   CreatedApiKeyResponse,
   CreatedInvitationResponse,
   DraftListResponse,
@@ -64,8 +65,16 @@ export function browserCsrfToken(): string | undefined {
 export class DashboardApi {
   constructor(private readonly fetchImplementation: typeof fetch) {}
 
-  async listDrafts(): Promise<DraftListResponse> {
-    return this.#get("/dashboard/api/drafts?limit=100&offset=0");
+  async listCategories(): Promise<CategoryListResponse> {
+    return this.#get("/dashboard/api/categories");
+  }
+
+  // The category filter is applied by the server so the visible list always
+  // matches what an exact-match query would return.
+  async listDrafts(category?: string): Promise<DraftListResponse> {
+    const filter =
+      category === undefined ? "" : `&category=${encodeURIComponent(category)}`;
+    return this.#get(`/dashboard/api/drafts?limit=100&offset=0${filter}`);
   }
 
   async listVersions(draftId: string): Promise<DraftVersionListResponse> {
@@ -77,6 +86,7 @@ export class DashboardApi {
   async updateDraft(
     draftId: string,
     update: {
+      category?: string | null;
       status?: "disabled" | "enabled";
       title?: string | null;
       ttlSeconds?: number;
