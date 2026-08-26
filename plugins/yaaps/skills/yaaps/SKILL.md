@@ -1,6 +1,6 @@
 ---
 name: yaaps
-description: Connect to YAAPS and publish or manage temporary, self-contained HTML reports. Use when a user wants to share a report through YAAPS or list, inspect, disable, enable, or delete YAAPS drafts.
+description: Connect to YAAPS and publish or manage temporary, self-contained HTML reports. Use when a user wants to share a report through YAAPS or list, inspect, categorize, disable, enable, or delete YAAPS drafts.
 license: MIT
 ---
 
@@ -19,7 +19,7 @@ Resolve `<skill-directory>` to this skill's installed directory. Keep it quoted.
 
 - Never ask for, print, inspect, log, or place an API key in a command. The helper generates and reads credentials internally.
 - If a key appears in chat, do not use or repeat it. Tell the user to revoke it and reconnect.
-- Publishing, disabling, enabling, and deleting mutate the user's YAAPS account. Perform only the requested operation.
+- Publishing, categorizing, disabling, enabling, and deleting mutate the user's YAAPS account. Perform only the requested operation.
 - Delete only after explicit authorization for the exact draft ID. First inspect it and state its title and public URL. Then pass the same ID as the positional ID and `--confirm` value. Offer `disable` when permanent deletion is unnecessary.
 - Do not blindly retry an ambiguous publish. Use `list` and `inspect` to determine whether the version was created.
 
@@ -37,15 +37,18 @@ The full key is created locally, the server receives only its hash and non-secre
 
 Publish only when asked. The input must already be one complete, self-contained HTML file. Do not pass HTML with local file references or network dependencies; embed required content first without adding scripts, forms, frames, plugins, or network requests.
 
-- New draft: `<helper> publish <file> [--title <title>] [--ttl <seconds>]`
-- New immutable version: identify the intended draft first, then run `<helper> publish <file> --draft-id <draft-id> [--title <title>] [--ttl <seconds>]`
+- New draft: `<helper> publish <file> [--category <name>] [--title <title>] [--ttl <seconds>]`
+- New immutable version: identify the intended draft first, then run `<helper> publish <file> --draft-id <draft-id> [--category <name>] [--title <title>] [--ttl <seconds>]`
+
+A category is a single free-text label of at most 100 characters that groups related reports; a draft has at most one. Pass `--category` only when the user names a group or an existing category clearly applies. Publishing a new version with `--category` replaces the draft's stored category, so omit the flag to keep it.
 
 The helpers intentionally do not infer drafts from local file paths. Inspect the JSON response and return `draft.publicUrl`, plus the draft ID and `version.versionNumber` when useful.
 
 ## Manage drafts
 
-- List: `<helper> list [--limit <number>] [--offset <number>]`
+- List: `<helper> list [--limit <number>] [--offset <number>] [--category <name>]`. The category filter is an exact, case-sensitive match; use `list` without it to discover the categories in use.
 - Inspect with versions: `<helper> inspect <draft-id>`
+- Categorize: `<helper> categorize <draft-id> <category>` to set or change the category, `<helper> categorize <draft-id> --clear` to remove it. Pass exactly one of the two.
 - Disable: `<helper> disable <draft-id>`, then inspect it.
 - Enable: `<helper> enable <draft-id>`, then inspect it.
 - Delete after exact authorization: `<helper> delete <draft-id> --confirm <draft-id>`.

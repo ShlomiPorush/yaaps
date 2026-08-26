@@ -123,6 +123,7 @@ printf '{"health":{"status":"ok"},"readiness":{"status":"ready"}}\\n'
     const apiKey = `yaaps_${"p".repeat(10)}_${"s".repeat(43)}`;
     const draftId = "E".repeat(32);
     const draft = {
+      category: null as string | null,
       createdAt: "2026-08-24T00:00:00.000Z",
       expiresAt: "2026-08-25T00:00:00.000Z",
       id: draftId,
@@ -152,7 +153,7 @@ printf '{"health":{"status":"ok"},"readiness":{"status":"ready"}}\\n'
         response.setHeader("content-type", "application/json");
         if (
           request.method === "POST" &&
-          request.url?.startsWith("/api/drafts?title=Sh%20report")
+          request.url?.startsWith("/api/drafts?")
         ) {
           response.statusCode = 201;
           response.end(
@@ -167,7 +168,7 @@ printf '{"health":{"status":"ok"},"readiness":{"status":"ready"}}\\n'
               },
             }),
           );
-        } else if (request.url === "/api/drafts?limit=1&offset=0") {
+        } else if (request.url?.startsWith("/api/drafts?limit=1&offset=0")) {
           response.end(
             JSON.stringify({ items: [draft], limit: 1, offset: 0, total: 1 }),
           );
@@ -190,7 +191,7 @@ printf '{"health":{"status":"ok"},"readiness":{"status":"ready"}}\\n'
           response.end(
             JSON.stringify({
               ...draft,
-              status: (JSON.parse(body) as { status: string }).status,
+              ...(JSON.parse(body) as Record<string, unknown>),
             }),
           );
         } else if (
@@ -254,6 +255,8 @@ printf '{"health":{"status":"ok"},"readiness":{"status":"ready"}}\\n'
       const published = await runHelper(
         "publish",
         toShellPath(reportPath),
+        "--category",
+        "Sh group",
         "--title",
         "Sh report",
         "--ttl",
@@ -263,10 +266,48 @@ printf '{"health":{"status":"ok"},"readiness":{"status":"ready"}}\\n'
         draft: { id: draftId },
         version: { versionNumber: 1 },
       });
+      expect(requests.at(-1)?.url).toBe(
+        "/api/drafts?category=Sh%20group&title=Sh%20report&ttlSeconds=3600",
+      );
       expect(requests.at(-1)?.body).toBe(html);
 
       const listed = await runHelper("list", "--limit", "1");
       expect(JSON.parse(listed.stdout)).toMatchObject({ total: 1 });
+
+      const filtered = await runHelper(
+        "list",
+        "--limit",
+        "1",
+        "--category",
+        "Sh group",
+      );
+      expect(JSON.parse(filtered.stdout)).toMatchObject({ total: 1 });
+      expect(requests.at(-1)?.url).toBe(
+        "/api/drafts?limit=1&offset=0&category=Sh%20group",
+      );
+
+      const categorized = await runHelper("categorize", draftId, "Sh group");
+      expect(JSON.parse(categorized.stdout)).toMatchObject({
+        category: "Sh group",
+      });
+      expect(requests.at(-1)).toMatchObject({
+        body: '{"category":"Sh group"}',
+        method: "PATCH",
+        url: `/api/drafts/${draftId}`,
+      });
+
+      const uncategorized = await runHelper("categorize", draftId, "--clear");
+      expect(JSON.parse(uncategorized.stdout)).toMatchObject({
+        category: null,
+      });
+      expect(requests.at(-1)?.body).toBe('{"category":null}');
+
+      await expect(
+        runHelper("categorize", draftId, "Sh group", "--clear"),
+      ).rejects.toMatchObject({ stdout: "" });
+      await expect(runHelper("categorize", draftId)).rejects.toMatchObject({
+        stdout: "",
+      });
 
       const inspected = await runHelper("inspect", draftId);
       expect(JSON.parse(inspected.stdout)).toMatchObject({
@@ -318,6 +359,7 @@ describe.runIf(process.platform === "win32")(
       }> = [];
       const draftId = "D".repeat(32);
       const draft = {
+        category: null as string | null,
         createdAt: "2026-08-24T00:00:00.000Z",
         expiresAt: "2026-08-25T00:00:00.000Z",
         id: draftId,
@@ -359,13 +401,13 @@ describe.runIf(process.platform === "win32")(
                 status: "approved",
               }),
             );
-          } else if (request.url === "/api/drafts?limit=1&offset=0") {
+          } else if (request.url?.startsWith("/api/drafts?limit=1&offset=0")) {
             response.end(
               JSON.stringify({ items: [], limit: 1, offset: 0, total: 0 }),
             );
           } else if (
             request.method === "POST" &&
-            request.url?.startsWith("/api/drafts?title=Test%20report")
+            request.url?.startsWith("/api/drafts?")
           ) {
             response.statusCode = 201;
             response.end(
@@ -399,7 +441,7 @@ describe.runIf(process.platform === "win32")(
             response.end(
               JSON.stringify({
                 ...draft,
-                status: (JSON.parse(body) as { status: string }).status,
+                ...(JSON.parse(body) as Record<string, unknown>),
               }),
             );
           } else if (
@@ -529,6 +571,8 @@ describe.runIf(process.platform === "win32")(
             script,
             "publish",
             reportPath,
+            "--category",
+            "Test group",
             "--title",
             "Test report",
             "--ttl",
@@ -540,9 +584,85 @@ describe.runIf(process.platform === "win32")(
           draft: { id: draftId },
           version: { versionNumber: 1 },
         });
+        expect(requests.at(-1)?.url).toBe(
+          "/api/drafts?category=Test%20group&title=Test%20report&ttlSeconds=3600",
+        );
         expect(requests.at(-1)?.body).toBe(
           '<!doctype html><html lang="en"><head><title>Safe report</title></head><body><h1>Safe report</h1></body></html>',
         );
+
+        const filtered = await execFileAsync(
+          "powershell.exe",
+          [
+            "-NoLogo",
+            "-NoProfile",
+            "-File",
+            script,
+            "list",
+            "--limit",
+            "1",
+            "--category",
+            "Test group",
+          ],
+          { encoding: "utf8", env: environment, windowsHide: true },
+        );
+        expect(JSON.parse(filtered.stdout)).toMatchObject({ total: 0 });
+        expect(requests.at(-1)?.url).toBe(
+          "/api/drafts?limit=1&offset=0&category=Test%20group",
+        );
+
+        const categorized = await execFileAsync(
+          "powershell.exe",
+          [
+            "-NoLogo",
+            "-NoProfile",
+            "-File",
+            script,
+            "categorize",
+            draftId,
+            "Test group",
+          ],
+          { encoding: "utf8", env: environment, windowsHide: true },
+        );
+        expect(JSON.parse(categorized.stdout)).toMatchObject({
+          category: "Test group",
+        });
+        expect(requests.at(-1)?.body).toBe('{"category":"Test group"}');
+
+        const uncategorized = await execFileAsync(
+          "powershell.exe",
+          [
+            "-NoLogo",
+            "-NoProfile",
+            "-File",
+            script,
+            "categorize",
+            draftId,
+            "--clear",
+          ],
+          { encoding: "utf8", env: environment, windowsHide: true },
+        );
+        expect(JSON.parse(uncategorized.stdout)).toMatchObject({
+          category: null,
+        });
+        expect(requests.at(-1)?.body).toBe('{"category":null}');
+
+        for (const invalid of [[draftId, "Test group", "--clear"], [draftId]]) {
+          await expect(
+            execFileAsync(
+              "powershell.exe",
+              [
+                "-NoLogo",
+                "-NoProfile",
+                "-File",
+                script,
+                "categorize",
+                ...invalid,
+              ],
+              { encoding: "utf8", env: environment, windowsHide: true },
+            ),
+          ).rejects.toMatchObject({ stdout: "" });
+        }
 
         const inspected = await execFileAsync(
           "powershell.exe",
@@ -602,7 +722,7 @@ describe.runIf(process.platform === "win32")(
           server.close((error) => (error ? reject(error) : resolve())),
         );
       }
-    }, 15_000);
+    }, 40_000);
 
     it.runIf(pwshAvailable)(
       "connects under PowerShell 7 with a non en-US culture",

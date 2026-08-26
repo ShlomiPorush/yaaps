@@ -44,6 +44,7 @@ YAAPS_JSON_JS='function run(argv){
       if(value===null||value===undefined) return "";
       return (typeof value==="object")?JSON.stringify(value):String(value);
     }
+    case "category_body": return JSON.stringify({category:a[0]==="clear"?null:a[1]});
     case "connect_body": return JSON.stringify({keyHash:a[0],keyPrefix:a[1],label:a[2]});
     case "secret_body": return JSON.stringify({deviceSecret:a[0]});
     case "status_body": return JSON.stringify({status:a[0]});
@@ -74,6 +75,7 @@ if op == "get":
     elif isinstance(v, bool): w("true" if v else "false")
     elif isinstance(v, (dict, list)): w(json.dumps(v, separators=(",", ":"), ensure_ascii=False))
     else: w(str(v))
+elif op == "category_body": w(json.dumps({"category": None if a[0] == "clear" else a[1]}, separators=(",", ":"), ensure_ascii=False))
 elif op == "connect_body": w(json.dumps({"keyHash": a[0], "keyPrefix": a[1], "label": a[2]}, separators=(",", ":"), ensure_ascii=False))
 elif op == "secret_body": w(json.dumps({"deviceSecret": a[0]}, separators=(",", ":"), ensure_ascii=False))
 elif op == "status_body": w(json.dumps({"status": a[0]}, separators=(",", ":"), ensure_ascii=False))
@@ -113,6 +115,7 @@ json_get() {
     fail 'The server response was not valid JSON.'
   printf '%s' "$yaaps_json_get_output"
 }
+json_category_body() { yaaps_js category_body "$1" "$2"; }
 json_connect_body() { yaaps_js connect_body "$1" "$2" "$3"; }
 json_secret_body() { yaaps_js secret_body "$1"; }
 json_status_body() { yaaps_js status_body "$1"; }
@@ -362,12 +365,13 @@ case "$command_name" in
     json_health "$(http_request GET "$status_url/healthz" '' '' '')" "$(http_request GET "$status_url/readyz" '' '' '')"
     ;;
   publish)
-    [ "$#" -ge 1 ] || fail 'Usage: publish <html-file> [--draft-id <id>] [--title <title>] [--ttl <seconds>]'
+    [ "$#" -ge 1 ] || fail 'Usage: publish <html-file> [--category <name>] [--draft-id <id>] [--title <title>] [--ttl <seconds>]'
     publish_file=$1; shift
     [ -f "$publish_file" ] || fail 'The HTML file does not exist.'
-    publish_draft= publish_title= publish_ttl=
+    publish_category= publish_draft= publish_title= publish_ttl=
     while [ "$#" -gt 0 ]; do
       case "$1" in
+        --category) [ "$#" -ge 2 ] || fail '--category requires a value.'; publish_category=$2; shift 2 ;;
         --draft-id) [ "$#" -ge 2 ] || fail '--draft-id requires a value.'; publish_draft=$(assert_draft_id "$2"); shift 2 ;;
         --title) [ "$#" -ge 2 ] || fail '--title requires a value.'; publish_title=$2; shift 2 ;;
         --ttl) [ "$#" -ge 2 ] || fail '--ttl requires a value.'; publish_ttl=$2; shift 2 ;;
@@ -378,6 +382,7 @@ case "$command_name" in
     publish_route=/api/drafts
     [ -z "$publish_draft" ] || publish_route="/api/drafts/$publish_draft/versions"
     publish_separator='?'
+    if [ -n "$publish_category" ]; then publish_route="$publish_route${publish_separator}category=$(url_encode "$publish_category")"; publish_separator='&'; fi
     if [ -n "$publish_title" ]; then publish_route="$publish_route${publish_separator}title=$(url_encode "$publish_title")"; publish_separator='&'; fi
     if [ -n "$publish_ttl" ]; then
       case "$publish_ttl" in *[!0-9]*|'') fail '--ttl must be a positive integer.' ;; esac
@@ -387,12 +392,14 @@ case "$command_name" in
     http_request POST "$yaaps_api_url$publish_route" "$yaaps_api_key" '' "$publish_file"
     ;;
   list)
-    list_limit=50 list_offset=0
+    list_category= list_limit=50 list_offset=0
     while [ "$#" -gt 0 ]; do
-      case "$1" in --limit) [ "$#" -ge 2 ] || fail '--limit requires a value.'; list_limit=$2; shift 2 ;; --offset) [ "$#" -ge 2 ] || fail '--offset requires a value.'; list_offset=$2; shift 2 ;; *) fail "Unknown list argument: $1" ;; esac
+      case "$1" in --category) [ "$#" -ge 2 ] || fail '--category requires a value.'; list_category=$2; shift 2 ;; --limit) [ "$#" -ge 2 ] || fail '--limit requires a value.'; list_limit=$2; shift 2 ;; --offset) [ "$#" -ge 2 ] || fail '--offset requires a value.'; list_offset=$2; shift 2 ;; *) fail "Unknown list argument: $1" ;; esac
     done
     load_credentials
-    http_request GET "$yaaps_api_url/api/drafts?limit=$list_limit&offset=$list_offset" "$yaaps_api_key" '' ''
+    list_route="/api/drafts?limit=$list_limit&offset=$list_offset"
+    [ -z "$list_category" ] || list_route="$list_route&category=$(url_encode "$list_category")"
+    http_request GET "$yaaps_api_url$list_route" "$yaaps_api_key" '' ''
     ;;
   inspect)
     [ "$#" -eq 1 ] || fail 'Usage: inspect <draft-id>'
@@ -401,6 +408,30 @@ case "$command_name" in
     inspect_draft=$(http_request GET "$yaaps_api_url/api/drafts/$inspect_id" "$yaaps_api_key" '' '')
     inspect_versions=$(http_request GET "$yaaps_api_url/api/drafts/$inspect_id/versions?limit=100&offset=0" "$yaaps_api_key" '' '')
     json_pair "$inspect_draft" "$inspect_versions"
+    ;;
+  categorize)
+    [ "$#" -ge 1 ] || fail 'Usage: categorize <draft-id> <category> | categorize <draft-id> --clear'
+    categorize_id=$(assert_draft_id "$1"); shift
+    categorize_category= categorize_clear=false categorize_given=false
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --clear) categorize_clear=true; shift ;;
+        --*) fail "Unknown categorize argument: $1" ;;
+        *)
+          [ "$categorize_given" = false ] || fail 'Usage: categorize <draft-id> <category> | categorize <draft-id> --clear'
+          categorize_category=$1; categorize_given=true; shift
+          ;;
+      esac
+    done
+    if [ "$categorize_clear" = true ]; then
+      [ "$categorize_given" = false ] || fail 'A category and --clear cannot be used together.'
+      categorize_body=$(json_category_body clear '')
+    else
+      [ "$categorize_given" = true ] || fail 'Provide a category or --clear.'
+      categorize_body=$(json_category_body set "$categorize_category")
+    fi
+    load_credentials
+    http_request PATCH "$yaaps_api_url/api/drafts/$categorize_id" "$yaaps_api_key" "$categorize_body" ''
     ;;
   disable|enable)
     [ "$#" -eq 1 ] || fail "Usage: $command_name <draft-id>"
@@ -421,5 +452,5 @@ case "$command_name" in
     http_request DELETE "$yaaps_api_url/api/drafts/$delete_id" "$yaaps_api_key" '' '' >/dev/null
     json_deleted "$delete_id"
     ;;
-  *) fail 'Unknown command. Use connect, config show, status, publish, list, inspect, disable, enable, or delete.' ;;
+  *) fail 'Unknown command. Use connect, config show, status, publish, list, inspect, categorize, disable, enable, or delete.' ;;
 esac

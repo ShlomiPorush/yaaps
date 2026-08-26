@@ -22,6 +22,7 @@ export interface YaapsCredentials {
 }
 
 export interface PublishOptions {
+  category?: string;
   draftId?: string;
   html: Uint8Array;
   title?: string;
@@ -61,6 +62,7 @@ function publishRoute(options: PublishOptions): string {
     ? `/api/drafts/${options.draftId}/versions`
     : "/api/drafts";
   const query = new URLSearchParams();
+  if (options.category !== undefined) query.set("category", options.category);
   if (options.title !== undefined) query.set("title", options.title);
   if (options.ttlSeconds !== undefined) {
     query.set("ttlSeconds", String(options.ttlSeconds));
@@ -91,14 +93,18 @@ export async function publishReport(
 
 export async function listDrafts(
   credentials: YaapsCredentials,
-  pagination: { limit?: number; offset?: number } = {},
+  selection: { category?: string; limit?: number; offset?: number } = {},
   fetchImplementation: typeof fetch = fetch,
 ): Promise<DraftListResponse> {
   const query = new URLSearchParams();
-  if (pagination.limit !== undefined)
-    query.set("limit", String(pagination.limit));
-  if (pagination.offset !== undefined) {
-    query.set("offset", String(pagination.offset));
+  if (selection.limit !== undefined) {
+    query.set("limit", String(selection.limit));
+  }
+  if (selection.offset !== undefined) {
+    query.set("offset", String(selection.offset));
+  }
+  if (selection.category !== undefined) {
+    query.set("category", selection.category);
   }
   return request(
     credentials,
@@ -147,7 +153,11 @@ export async function listDraftVersions(
 export async function updateDraft(
   credentials: YaapsCredentials,
   draftId: string,
-  update: { status?: DraftStatus; title?: string | null },
+  update: {
+    category?: string | null;
+    status?: DraftStatus;
+    title?: string | null;
+  },
   fetchImplementation: typeof fetch = fetch,
 ): Promise<DraftSummary> {
   return request(
