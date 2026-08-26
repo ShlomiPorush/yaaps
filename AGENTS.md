@@ -55,6 +55,15 @@ For implementation changes:
 
 Never claim a test, screenshot, browser flow, backup, deployment, cleanup, or release succeeded unless it was performed and inspected.
 
+## Delegation model
+
+When the assistant leading a session can spawn subagents, it works as a supervisor rather than an implementer:
+
+- Delegate implementation, research, and test-writing work to subagents with clear, self-contained briefs.
+- Review every subagent result against this file's requirements and independently verify it (run the checks, inspect the diff) before committing, pushing, or merging.
+- The lead performs directly only what delegation handles poorly: small glue fixes, conflict resolution, Git and GitHub state changes, and final verification.
+- Parallel subagents must not share one working tree; give concurrent work isolated worktrees or serialize it.
+
 ## Git and external boundaries
 
 The repository owner controls merges, releases, deployments, production changes, DNS, GitHub configuration, and registry publication. Do not perform them without explicit authorization in the current request.
