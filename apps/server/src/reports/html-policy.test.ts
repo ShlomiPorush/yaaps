@@ -24,6 +24,90 @@ describe("server HTML policy", () => {
     expect(validateHtmlDocument(source)).toContain("<title>Report</title>");
   });
 
+  it("accepts HTTPS hyperlinks in both resource policies", () => {
+    const source = document(
+      '<a href="https://example.com/report">Source</a><area href="https://example.com/map">',
+    );
+
+    expect(validateHtmlDocument(source, "isolated")).toContain("Source");
+    expect(validateHtmlDocument(source, "connected")).toContain("Source");
+  });
+
+  it("accepts only HTTPS presentation resources in connected reports", () => {
+    const source = document(
+      [
+        '<img src="https://cdn.example.com/chart.png" srcset="https://cdn.example.com/chart.png 1x, https://cdn.example.com/chart@2x.png 2x">',
+        '<svg><image href="https://cdn.example.com/chart.png"></image></svg>',
+        '<p style="background-image:url(https://cdn.example.com/background.webp)">Connected</p>',
+      ].join(""),
+      [
+        "<title>Report</title>",
+        '<link rel="stylesheet" href="https://cdn.example.com/report.css">',
+        '<style>@import "https://cdn.example.com/theme.css";@font-face{font-family:Report;src:url(https://cdn.example.com/report.woff2)}</style>',
+      ].join(""),
+    );
+
+    expect(validateHtmlDocument(source, "connected")).toContain("Connected");
+    expect(() => validateHtmlDocument(source, "isolated")).toThrowError(
+      expect.objectContaining({ code: "ELEMENT_BLOCKED" }),
+    );
+  });
+
+  it.each([
+    ['<img src="http://cdn.example.com/chart.png">', "RESOURCE_BLOCKED"],
+    [
+      '<link rel="stylesheet" href="http://cdn.example.com/report.css">',
+      "ELEMENT_BLOCKED",
+    ],
+    [
+      '<p style="background:url(http://cdn.example.com/chart.png)">x</p>',
+      "CSS_NETWORK_RESOURCE",
+    ],
+    [
+      '<link rel="preload" href="https://cdn.example.com/report.css">',
+      "ELEMENT_BLOCKED",
+    ],
+  ])(
+    "rejects a non-HTTPS or non-presentation connected resource",
+    (markup, code) => {
+      const head = markup.startsWith("<link")
+        ? `<title>Report</title>${markup}`
+        : "<title>Report</title>";
+      const body = markup.startsWith("<link") ? "<p>Report</p>" : markup;
+      expect(() =>
+        validateHtmlDocument(document(body, head), "connected"),
+      ).toThrowError(expect.objectContaining({ code }));
+    },
+  );
+
+  it.each([
+    [
+      "script",
+      "<script>fetch('https://example.com')</script>",
+      "ELEMENT_BLOCKED",
+    ],
+    [
+      "event handler",
+      '<img src="https://cdn.example.com/x.png" onload="alert(1)">',
+      "EVENT_HANDLER_BLOCKED",
+    ],
+    [
+      "form",
+      '<form action="https://example.com"><button>Send</button></form>',
+      "ELEMENT_BLOCKED",
+    ],
+    ["frame", '<iframe src="https://example.com"></iframe>', "ELEMENT_BLOCKED"],
+    [
+      "image-set",
+      '<p style="background:image-set(url(https://cdn.example.com/x.png) 1x)">x</p>',
+      "CSS_NETWORK_RESOURCE",
+    ],
+  ])("keeps %s blocked in connected reports", (_name, body, code) => {
+    expect(() =>
+      validateHtmlDocument(document(body), "connected"),
+    ).toThrowError(expect.objectContaining({ code }));
+  });
+
   it.each([
     ["script", "<script>alert(1)</script>", "ELEMENT_BLOCKED"],
     ["module script", '<script type="module"></script>', "ELEMENT_BLOCKED"],
@@ -35,11 +119,6 @@ describe("server HTML policy", () => {
     [
       "javascript URL",
       '<a href="javascript:alert(1)">Unsafe</a>',
-      "RESOURCE_BLOCKED",
-    ],
-    [
-      "external link",
-      '<a href="https://example.com">Unsafe</a>',
       "RESOURCE_BLOCKED",
     ],
     [

@@ -84,6 +84,55 @@ describe("agent report API", () => {
     expect(response.statusCode).toBe(201);
   });
 
+  it("publishes and exposes immutable per-version resource policies", async () => {
+    const actor = await identity("Connected uploader");
+    const connected = await application.inject({
+      headers: {
+        authorization: actor.authorization,
+        "content-type": "text/html",
+      },
+      method: "POST",
+      payload: html('<img src="https://cdn.example.com/chart.png">'),
+      url: "/api/drafts?resourcePolicy=connected",
+    });
+
+    expect(connected.statusCode).toBe(201);
+    const first = publishDraftResponseSchema.parse(connected.json());
+    expect(first).toMatchObject({
+      draft: { resourcePolicy: "connected" },
+      version: { resourcePolicy: "connected", versionNumber: 1 },
+    });
+
+    const isolated = await application.inject({
+      headers: {
+        authorization: actor.authorization,
+        "content-type": "text/html",
+      },
+      method: "POST",
+      payload: html('<a href="https://example.com">Source</a>'),
+      url: `/api/drafts/${first.draft.id}/versions`,
+    });
+    expect(isolated.statusCode).toBe(201);
+    expect(publishDraftResponseSchema.parse(isolated.json())).toMatchObject({
+      draft: { resourcePolicy: "isolated" },
+      version: { resourcePolicy: "isolated", versionNumber: 2 },
+    });
+
+    const versions = await application.inject({
+      headers: { authorization: actor.authorization },
+      method: "GET",
+      url: `/api/drafts/${first.draft.id}/versions`,
+    });
+    expect(draftVersionListResponseSchema.parse(versions.json())).toMatchObject(
+      {
+        items: [
+          { resourcePolicy: "isolated", versionNumber: 2 },
+          { resourcePolicy: "connected", versionNumber: 1 },
+        ],
+      },
+    );
+  });
+
   it("publishes, versions, lists, and inspects only authenticated owner data", async () => {
     const actor = await identity("Owner");
     const created = await application.inject({

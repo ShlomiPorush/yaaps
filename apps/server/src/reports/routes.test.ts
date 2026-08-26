@@ -6,7 +6,10 @@ import type { FastifyInstance } from "fastify";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { buildApplication } from "../app.js";
-import { REPORT_CONTENT_SECURITY_POLICY } from "./routes.js";
+import {
+  CONNECTED_REPORT_CONTENT_SECURITY_POLICY,
+  REPORT_CONTENT_SECURITY_POLICY,
+} from "./routes.js";
 
 let application: FastifyInstance;
 let directory: string;
@@ -82,6 +85,43 @@ describe("public report routes", () => {
     expect(canonical.headers["x-content-type-options"]).toBe("nosniff");
     expect(canonical.headers["x-robots-tag"]).toContain("noindex");
     expect(canonical.headers["permissions-policy"]).toContain("camera=()");
+  });
+
+  it("serves each immutable version with its recorded resource-policy CSP", async () => {
+    const first = await application.yaapsData!.drafts.createDraft({
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      html: html('<a href="https://example.com">Source</a>'),
+      ownerId: "report-owner",
+    });
+    await application.yaapsData!.drafts.addVersion({
+      draftId: first.draftId,
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      html: html('<img src="https://cdn.example.com/chart.png">'),
+      ownerId: "report-owner",
+      resourcePolicy: "connected",
+    });
+
+    const latest = await application.inject({
+      method: "GET",
+      url: `/d/${first.draftId}`,
+    });
+    const original = await application.inject({
+      method: "GET",
+      url: `/d/${first.draftId}/v/1`,
+    });
+
+    expect(latest.headers["content-security-policy"]).toBe(
+      CONNECTED_REPORT_CONTENT_SECURITY_POLICY,
+    );
+    expect(latest.headers["content-security-policy"]).toContain(
+      "img-src data: https:",
+    );
+    expect(latest.headers["content-security-policy"]).toContain(
+      "connect-src 'none'",
+    );
+    expect(original.headers["content-security-policy"]).toBe(
+      REPORT_CONTENT_SECURITY_POLICY,
+    );
   });
 
   it("injects the escaped draft title into the share-preview metadata", async () => {

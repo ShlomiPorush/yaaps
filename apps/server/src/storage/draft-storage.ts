@@ -2,6 +2,8 @@ import { randomBytes, randomUUID } from "node:crypto";
 
 import type { Kysely, Transaction } from "kysely";
 
+import type { ReportResourcePolicy } from "@yaaps/contracts";
+
 import { validateHtmlDocument } from "../reports/html-policy.js";
 import type { HtmlBlobStore } from "./blob-store.js";
 import type { DatabaseSchema, DraftsTable } from "./schema.js";
@@ -19,6 +21,7 @@ export interface CreateDraftInput {
   expiresAt: string;
   html: Uint8Array;
   ownerId: string;
+  resourcePolicy?: ReportResourcePolicy;
   title?: string | null;
   uploadedByApiKeyId?: string | null;
 }
@@ -29,6 +32,7 @@ export interface AddVersionInput {
   expiresAt: string;
   html: Uint8Array;
   ownerId: string;
+  resourcePolicy?: ReportResourcePolicy;
   title?: string;
   uploadedByApiKeyId?: string | null;
 }
@@ -43,6 +47,7 @@ export interface StoredDraftVersion {
   byteLength: number;
   createdAt: string;
   draftId: string;
+  resourcePolicy: ReportResourcePolicy;
   sha256: string;
   versionNumber: number;
 }
@@ -50,17 +55,22 @@ export interface StoredDraftVersion {
 export interface StoredVersionMetadata {
   byteLength: number;
   createdAt: string;
+  resourcePolicy: ReportResourcePolicy;
   sha256: string;
   versionNumber: number;
 }
 
+export interface StoredDraft extends DraftsTable {
+  resourcePolicy: ReportResourcePolicy;
+}
+
 export interface PaginatedDrafts {
-  items: DraftsTable[];
+  items: StoredDraft[];
   total: number;
 }
 
 export interface AdminDraftRow {
-  draft: DraftsTable;
+  draft: StoredDraft;
   ownerDisplayName: string;
   ownerId: string;
 }
@@ -84,6 +94,7 @@ export type PublicReportResolution =
   | {
       expiresAt: string;
       html: Buffer;
+      resourcePolicy: ReportResourcePolicy;
       status: "available";
       title: string | null;
       versionNumber: number;
@@ -119,7 +130,8 @@ export class DraftStorage {
 
   async createDraft(input: CreateDraftInput): Promise<StoredDraftVersion> {
     return this.#operations.run(async () => {
-      validateHtmlDocument(input.html);
+      const resourcePolicy = input.resourcePolicy ?? "isolated";
+      validateHtmlDocument(input.html, resourcePolicy);
       const blob = await this.blobs.store(input.html);
       // A leading "-" is valid base64url but hostile to command-line tools.
       let draftId = randomBytes(24).toString("base64url");
@@ -148,12 +160,13 @@ export class DraftStorage {
           apiKeyId: input.uploadedByApiKeyId ?? null,
           createdAt,
           draftId,
+          resourcePolicy,
           versionNumber: 1,
         });
         await this.#insertAudit(transaction, {
           action: "draft.created",
           apiKeyId: input.uploadedByApiKeyId ?? null,
-          metadata: { versionNumber: 1 },
+          metadata: { resourcePolicy, versionNumber: 1 },
           targetId: draftId,
           userId: input.ownerId,
         });
@@ -164,6 +177,7 @@ export class DraftStorage {
         byteLength: blob.byteLength,
         createdAt,
         draftId,
+        resourcePolicy,
         sha256: blob.sha256,
         versionNumber: 1,
       };
@@ -175,7 +189,8 @@ export class DraftStorage {
       if (!(await this.findForOwner(input.ownerId, input.draftId))) {
         throw new DraftNotFoundError();
       }
-      validateHtmlDocument(input.html);
+      const resourcePolicy = input.resourcePolicy ?? "isolated";
+      validateHtmlDocument(input.html, resourcePolicy);
       const blob = await this.blobs.store(input.html);
       const createdAt = new Date().toISOString();
       let versionNumber = 0;
@@ -197,6 +212,7 @@ export class DraftStorage {
           apiKeyId: input.uploadedByApiKeyId ?? null,
           createdAt,
           draftId: input.draftId,
+          resourcePolicy,
           versionNumber,
         });
         await transaction
@@ -216,7 +232,7 @@ export class DraftStorage {
         await this.#insertAudit(transaction, {
           action: "draft.version_created",
           apiKeyId: input.uploadedByApiKeyId ?? null,
-          metadata: { versionNumber },
+          metadata: { resourcePolicy, versionNumber },
           targetId: input.draftId,
           userId: input.ownerId,
         });
@@ -227,6 +243,7 @@ export class DraftStorage {
         byteLength: blob.byteLength,
         createdAt,
         draftId: input.draftId,
+        resourcePolicy,
         sha256: blob.sha256,
         versionNumber,
       };
@@ -236,12 +253,22 @@ export class DraftStorage {
   async findForOwner(
     ownerId: string,
     draftId: string,
-  ): Promise<DraftsTable | undefined> {
+  ): Promise<StoredDraft | undefined> {
     return this.database
       .selectFrom("drafts")
-      .selectAll()
-      .where("id", "=", draftId)
-      .where("owner_id", "=", ownerId)
+      .innerJoin("versions", (join) =>
+        join
+          .onRef("versions.draft_id", "=", "drafts.id")
+          .onRef(
+            "versions.version_number",
+            "=",
+            "drafts.latest_version_number",
+          ),
+      )
+      .selectAll("drafts")
+      .select("versions.resource_policy as resourcePolicy")
+      .where("drafts.id", "=", draftId)
+      .where("drafts.owner_id", "=", ownerId)
       .executeTakeFirst();
   }
 
@@ -254,14 +281,24 @@ export class DraftStorage {
     const [items, count] = await Promise.all([
       this.database
         .selectFrom("drafts")
-        .selectAll()
-        // The owner predicate is unconditional; the category only narrows it.
-        .where("owner_id", "=", ownerId)
-        .$if(category !== undefined, (builder) =>
-          builder.where("category", "=", category!),
+        .innerJoin("versions", (join) =>
+          join
+            .onRef("versions.draft_id", "=", "drafts.id")
+            .onRef(
+              "versions.version_number",
+              "=",
+              "drafts.latest_version_number",
+            ),
         )
-        .orderBy("updated_at", "desc")
-        .orderBy("id", "desc")
+        .selectAll("drafts")
+        .select("versions.resource_policy as resourcePolicy")
+        // The owner predicate is unconditional; the category only narrows it.
+        .where("drafts.owner_id", "=", ownerId)
+        .$if(category !== undefined, (builder) =>
+          builder.where("drafts.category", "=", category!),
+        )
+        .orderBy("drafts.updated_at", "desc")
+        .orderBy("drafts.id", "desc")
         .limit(limit)
         .offset(offset)
         .execute(),
@@ -301,8 +338,18 @@ export class DraftStorage {
       this.database
         .selectFrom("drafts")
         .innerJoin("users", "users.id", "drafts.owner_id")
+        .innerJoin("versions", (join) =>
+          join
+            .onRef("versions.draft_id", "=", "drafts.id")
+            .onRef(
+              "versions.version_number",
+              "=",
+              "drafts.latest_version_number",
+            ),
+        )
         .selectAll("drafts")
         .select("users.display_name as owner_display_name")
+        .select("versions.resource_policy as resourcePolicy")
         .orderBy("drafts.updated_at", "desc")
         .orderBy("drafts.id", "desc")
         .limit(limit)
@@ -336,7 +383,13 @@ export class DraftStorage {
     const [items, count] = await Promise.all([
       this.database
         .selectFrom("versions")
-        .select(["byte_length", "created_at", "sha256", "version_number"])
+        .select([
+          "byte_length",
+          "created_at",
+          "resource_policy",
+          "sha256",
+          "version_number",
+        ])
         .where("draft_id", "=", draftId)
         .orderBy("version_number", "desc")
         .limit(limit)
@@ -352,6 +405,7 @@ export class DraftStorage {
       items: items.map((item) => ({
         byteLength: item.byte_length,
         createdAt: item.created_at,
+        resourcePolicy: item.resource_policy,
         sha256: item.sha256,
         versionNumber: item.version_number,
       })),
@@ -367,7 +421,7 @@ export class DraftStorage {
     ownerId: string;
     status?: DraftsTable["status"];
     title?: string | null;
-  }): Promise<DraftsTable> {
+  }): Promise<StoredDraft> {
     return this.#operations.run(async () => {
       const updatedAt = new Date().toISOString();
       return this.database.transaction().execute(async (transaction) => {
@@ -412,7 +466,13 @@ export class DraftStorage {
           targetId: input.draftId,
           userId: input.ownerId,
         });
-        return result;
+        const version = await transaction
+          .selectFrom("versions")
+          .select("resource_policy")
+          .where("draft_id", "=", result.id)
+          .where("version_number", "=", result.latest_version_number)
+          .executeTakeFirstOrThrow();
+        return { ...result, resourcePolicy: version.resource_policy };
       });
     });
   }
@@ -448,7 +508,7 @@ export class DraftStorage {
     actorUserId: string;
     draftId: string;
     status: DraftsTable["status"];
-  }): Promise<DraftsTable> {
+  }): Promise<StoredDraft> {
     return this.#operations.run(async () => {
       const updatedAt = new Date().toISOString();
       return this.database.transaction().execute(async (transaction) => {
@@ -468,7 +528,13 @@ export class DraftStorage {
           targetId: input.draftId,
           userId: input.actorUserId,
         });
-        return result;
+        const version = await transaction
+          .selectFrom("versions")
+          .select("resource_policy")
+          .where("draft_id", "=", result.id)
+          .where("version_number", "=", result.latest_version_number)
+          .executeTakeFirstOrThrow();
+        return { ...result, resourcePolicy: version.resource_policy };
       });
     });
   }
@@ -522,7 +588,7 @@ export class DraftStorage {
       .innerJoin("versions", (join) =>
         join.onRef("versions.draft_id", "=", "drafts.id"),
       )
-      .select("versions.blob_key")
+      .select(["versions.blob_key", "versions.resource_policy"])
       .where("drafts.id", "=", draftId)
       .where("versions.version_number", "=", versionNumber)
       .executeTakeFirst();
@@ -533,6 +599,7 @@ export class DraftStorage {
     return {
       expiresAt: draft.expires_at,
       html: await this.blobs.read(version.blob_key),
+      resourcePolicy: version.resource_policy,
       status: "available",
       title: draft.title,
       versionNumber,
@@ -620,6 +687,7 @@ export class DraftStorage {
       draftId: string;
       key: string;
       sha256: string;
+      resourcePolicy: ReportResourcePolicy;
       versionNumber: number;
     },
   ): Promise<void> {
@@ -631,6 +699,7 @@ export class DraftStorage {
         created_at: input.createdAt,
         draft_id: input.draftId,
         id: randomUUID(),
+        resource_policy: input.resourcePolicy,
         sha256: input.sha256,
         uploaded_by_api_key_id: input.apiKeyId,
         version_number: input.versionNumber,

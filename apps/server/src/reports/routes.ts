@@ -1,4 +1,4 @@
-import { draftIdSchema } from "@yaaps/contracts";
+import { draftIdSchema, type ReportResourcePolicy } from "@yaaps/contracts";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 
@@ -7,7 +7,7 @@ import type {
   PublicReportResolution,
 } from "../storage/draft-storage.js";
 
-export const REPORT_CONTENT_SECURITY_POLICY = [
+export const ISOLATED_REPORT_CONTENT_SECURITY_POLICY = [
   "sandbox",
   "default-src 'none'",
   "script-src 'none'",
@@ -22,6 +22,25 @@ export const REPORT_CONTENT_SECURITY_POLICY = [
   "frame-ancestors 'none'",
 ].join("; ");
 
+export const CONNECTED_REPORT_CONTENT_SECURITY_POLICY = [
+  "sandbox",
+  "default-src 'none'",
+  "script-src 'none'",
+  "connect-src 'none'",
+  "form-action 'none'",
+  "object-src 'none'",
+  "frame-src 'none'",
+  "base-uri 'none'",
+  "img-src data: https:",
+  "font-src data: https:",
+  "style-src 'unsafe-inline' https:",
+  "frame-ancestors 'none'",
+].join("; ");
+
+// Retain the original export for callers that mean the default policy.
+export const REPORT_CONTENT_SECURITY_POLICY =
+  ISOLATED_REPORT_CONTENT_SECURITY_POLICY;
+
 const draftParametersSchema = z.object({
   draftId: draftIdSchema,
 });
@@ -30,10 +49,18 @@ const versionParametersSchema = draftParametersSchema.extend({
   version: z.coerce.number().int().positive().safe(),
 });
 
-function applyReportHeaders(reply: FastifyReply): void {
+function applyReportHeaders(
+  reply: FastifyReply,
+  resourcePolicy: ReportResourcePolicy,
+): void {
   void reply
     .header("Cache-Control", "private, no-store")
-    .header("Content-Security-Policy", REPORT_CONTENT_SECURITY_POLICY)
+    .header(
+      "Content-Security-Policy",
+      resourcePolicy === "connected"
+        ? CONNECTED_REPORT_CONTENT_SECURITY_POLICY
+        : ISOLATED_REPORT_CONTENT_SECURITY_POLICY,
+    )
     .header(
       "Permissions-Policy",
       "camera=(), geolocation=(), microphone=(), payment=(), usb=()",
@@ -114,7 +141,7 @@ function sendResolution(
     });
   }
 
-  applyReportHeaders(reply);
+  applyReportHeaders(reply, resolution.resourcePolicy);
   return reply
     .type("text/html; charset=utf-8")
     .send(injectSharePreview(resolution.html, resolution.title, publicOrigin));

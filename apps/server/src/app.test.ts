@@ -87,6 +87,19 @@ describe("foundation server", () => {
     expect(document.paths["/api/drafts"].post.security).toEqual([
       { bearerAuth: [] },
     ]);
+    expect(document.paths["/api/drafts"].post.parameters).toContainEqual(
+      expect.objectContaining({
+        name: "resourcePolicy",
+        schema: expect.objectContaining({
+          default: "isolated",
+          enum: ["isolated", "connected"],
+        }),
+      }),
+    );
+    expect(
+      document.components.schemas.PublishDraftResponse.properties.version
+        .properties.resourcePolicy.enum,
+    ).toEqual(["isolated", "connected"]);
     expect(document.paths["/auth/device-connections"].post.security).toBe(
       undefined,
     );

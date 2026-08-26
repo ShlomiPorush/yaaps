@@ -1,5 +1,7 @@
 import type { Generated } from "kysely";
 
+import type { ReportResourcePolicy } from "@yaaps/contracts";
+
 export type UserRole = "admin" | "user";
 export type UserStatus = "active" | "disabled";
 export type DraftStatus = "disabled" | "enabled";
@@ -119,6 +121,7 @@ export interface VersionsTable {
   created_at: string;
   draft_id: string;
   id: string;
+  resource_policy: ReportResourcePolicy;
   sha256: string;
   uploaded_by_api_key_id: string | null;
   version_number: number;

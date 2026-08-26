@@ -6,7 +6,7 @@ import {
 } from "parse5";
 import { SAXParser } from "parse5-sax-parser";
 
-import { DOCUMENT_LIMITS } from "@yaaps/contracts";
+import { DOCUMENT_LIMITS, type ReportResourcePolicy } from "@yaaps/contracts";
 
 const MAXIMUM_NESTING_DEPTH = 100;
 
@@ -16,7 +16,6 @@ const BLOCKED_ELEMENTS = new Set([
   "embed",
   "form",
   "iframe",
-  "link",
   "object",
   "script",
 ]);
@@ -84,6 +83,7 @@ function fail(code: HtmlPolicyViolationCode, message: string): never {
 function validateCss(
   css: string,
   context: "declarationList" | "stylesheet" | "value",
+  resourcePolicy: ReportResourcePolicy,
 ) {
   let parseFailed = false;
   let tree;
@@ -105,7 +105,27 @@ function validateCss(
 
   walkCss(tree, (node) => {
     if (node.type === "Atrule" && node.name.toLowerCase() === "import") {
-      fail("CSS_NETWORK_RESOURCE", "CSS imports are not allowed.");
+      let importUrl: string | undefined;
+      if (node.prelude) {
+        walkCss(node.prelude, (child) => {
+          if (
+            importUrl === undefined &&
+            (child.type === "String" || child.type === "Url")
+          ) {
+            importUrl = child.value;
+          }
+        });
+      }
+      if (
+        resourcePolicy !== "connected" ||
+        importUrl === undefined ||
+        !isHttpsUrl(importUrl)
+      ) {
+        fail(
+          "CSS_NETWORK_RESOURCE",
+          "CSS imports must use HTTPS and require the connected resource policy.",
+        );
+      }
     }
     if (
       node.type === "Function" &&
@@ -128,14 +148,23 @@ function validateCss(
       node.type === "Url" &&
       node.value !== "" &&
       !node.value.startsWith("#") &&
-      !ALLOWED_EMBEDDED_RESOURCE.test(node.value)
+      !ALLOWED_EMBEDDED_RESOURCE.test(node.value) &&
+      !(resourcePolicy === "connected" && isHttpsUrl(node.value))
     ) {
       fail(
         "CSS_NETWORK_RESOURCE",
-        "CSS may reference only embedded bitmap images or fonts.",
+        "CSS resources must be embedded or use HTTPS with the connected resource policy.",
       );
     }
   });
+}
+
+function isHttpsUrl(value: string): boolean {
+  try {
+    return new URL(value).protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 function isElement(node: HtmlChildNode): node is HtmlElement {
@@ -157,7 +186,11 @@ function textContent(element: HtmlElement): string {
     .join("");
 }
 
-function validateElement(element: HtmlElement, depth: number): void {
+function validateElement(
+  element: HtmlElement,
+  depth: number,
+  resourcePolicy: ReportResourcePolicy,
+): void {
   if (depth > MAXIMUM_NESTING_DEPTH) {
     fail(
       "DOCUMENT_TOO_DEEP",
@@ -168,6 +201,27 @@ function validateElement(element: HtmlElement, depth: number): void {
   const tagName = element.tagName.toLowerCase();
   if (BLOCKED_ELEMENTS.has(tagName)) {
     fail("ELEMENT_BLOCKED", `The <${tagName}> element is not allowed.`);
+  }
+
+  if (tagName === "link") {
+    const rel = element.attrs
+      .find((attribute) => attribute.name.toLowerCase() === "rel")
+      ?.value.trim()
+      .toLowerCase();
+    const href = element.attrs
+      .find((attribute) => attribute.name.toLowerCase() === "href")
+      ?.value.trim();
+    if (
+      resourcePolicy !== "connected" ||
+      rel !== "stylesheet" ||
+      href === undefined ||
+      !isHttpsUrl(href)
+    ) {
+      fail(
+        "ELEMENT_BLOCKED",
+        "Only HTTPS stylesheets are allowed with the connected resource policy.",
+      );
+    }
   }
 
   for (const attribute of element.attrs) {
@@ -183,7 +237,18 @@ function validateElement(element: HtmlElement, depth: number): void {
     if (name === "srcdoc") {
       fail("SRCDOC_BLOCKED", "The srcdoc attribute is not allowed.");
     }
-    if (BLOCKED_RESOURCE_ATTRIBUTES.has(name)) {
+    if (
+      BLOCKED_RESOURCE_ATTRIBUTES.has(name) &&
+      !(
+        name === "srcset" &&
+        resourcePolicy === "connected" &&
+        ["img", "source"].includes(tagName) &&
+        value
+          .split(",")
+          .map((candidate) => candidate.trim().split(/\s+/u)[0])
+          .every((url) => url !== undefined && isHttpsUrl(url))
+      )
+    ) {
       fail(
         "RESOURCE_BLOCKED",
         `The ${name} resource attribute is not allowed.`,
@@ -192,7 +257,8 @@ function validateElement(element: HtmlElement, depth: number): void {
     if (name === "src") {
       if (
         !["image", "img"].includes(tagName) ||
-        !ALLOWED_EMBEDDED_RESOURCE.test(value)
+        (!ALLOWED_EMBEDDED_RESOURCE.test(value) &&
+          !(resourcePolicy === "connected" && isHttpsUrl(value)))
       ) {
         fail(
           "RESOURCE_BLOCKED",
@@ -201,20 +267,26 @@ function validateElement(element: HtmlElement, depth: number): void {
       }
     }
     if (name === "href") {
-      const embeddedImage =
-        tagName === "image" && ALLOWED_EMBEDDED_RESOURCE.test(value);
-      if (!value.startsWith("#") && !embeddedImage) {
+      const presentationResource =
+        (tagName === "image" &&
+          (ALLOWED_EMBEDDED_RESOURCE.test(value) ||
+            (resourcePolicy === "connected" && isHttpsUrl(value)))) ||
+        (tagName === "link" &&
+          resourcePolicy === "connected" &&
+          isHttpsUrl(value));
+      const hyperlink = ["a", "area"].includes(tagName) && isHttpsUrl(value);
+      if (!value.startsWith("#") && !presentationResource && !hyperlink) {
         fail(
           "RESOURCE_BLOCKED",
-          "Links may reference only locations inside the document.",
+          "Links must use HTTPS or reference a location inside the document.",
         );
       }
     }
     if (name === "style") {
-      validateCss(value, "declarationList");
+      validateCss(value, "declarationList", resourcePolicy);
     }
     if (CSS_VALUE_ATTRIBUTES.has(name)) {
-      validateCss(value, "value");
+      validateCss(value, "value", resourcePolicy);
     }
   }
 
@@ -230,12 +302,12 @@ function validateElement(element: HtmlElement, depth: number): void {
   }
 
   if (tagName === "style") {
-    validateCss(textContent(element), "stylesheet");
+    validateCss(textContent(element), "stylesheet", resourcePolicy);
   }
 
   for (const child of element.childNodes) {
     if (isElement(child)) {
-      validateElement(child, depth + 1);
+      validateElement(child, depth + 1, resourcePolicy);
     }
   }
 
@@ -243,7 +315,7 @@ function validateElement(element: HtmlElement, depth: number): void {
     const template = element as HtmlTemplate;
     for (const child of template.content.childNodes) {
       if (isElement(child)) {
-        validateElement(child, depth + 1);
+        validateElement(child, depth + 1, resourcePolicy);
       }
     }
   }
@@ -286,7 +358,10 @@ function validateSingleDocumentTokenStructure(source: string): void {
   }
 }
 
-export function validateHtmlDocument(bytes: Uint8Array): string {
+export function validateHtmlDocument(
+  bytes: Uint8Array,
+  resourcePolicy: ReportResourcePolicy = "isolated",
+): string {
   if (
     bytes.byteLength === 0 ||
     bytes.byteLength > DOCUMENT_LIMITS.maximumHtmlBytes
@@ -343,6 +418,6 @@ export function validateHtmlDocument(bytes: Uint8Array): string {
     );
   }
 
-  validateElement(root, 1);
+  validateElement(root, 1, resourcePolicy);
   return source;
 }
