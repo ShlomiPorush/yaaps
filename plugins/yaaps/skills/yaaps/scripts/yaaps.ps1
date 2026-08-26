@@ -205,7 +205,12 @@ try {
                     catch { [Console]::Error.WriteLine('YAAPS: could not open the browser; open the verification URL manually.') }
                 }
             }
-            $expires = [DateTimeOffset]::Parse([string]$connection.expiresAt)
+            # ConvertFrom-Json may return expiresAt as DateTime; reparsing its
+            # culture-formatted string form fails on non en-US locales.
+            $expiresRaw = $connection.expiresAt
+            $expires = if ($expiresRaw -is [DateTimeOffset]) { $expiresRaw }
+                elseif ($expiresRaw -is [DateTime]) { [DateTimeOffset]$expiresRaw }
+                else { [DateTimeOffset]::Parse([string]$expiresRaw, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::RoundtripKind) }
             while ([DateTimeOffset]::UtcNow -lt $expires) {
                 Start-Sleep -Seconds ([Math]::Max(1, [int]$connection.intervalSeconds))
                 $decision = Invoke-Request 'Post' "$apiUrl/auth/device-connections/token" '' @{ deviceSecret = $connection.deviceSecret } '' -Tolerant
