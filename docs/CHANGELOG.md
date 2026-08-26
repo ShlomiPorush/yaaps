@@ -6,6 +6,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Added
+
+- A monthly GitHub Actions check now raises the deferred upgrades for discussion when Node.js 26 reaches LTS or the latest typescript-eslint release supports TypeScript 7, without changing dependencies or creating duplicate issues.
+
+### Changed
+
+- Merges to main no longer rerun the full verification matrix, and a release pull request that only bumps the version files now runs the light quality checks alone; pull requests, the weekly scheduled run, and the release tag remain the verification gates, and the release tag reruns full verification before anything is published.
+
+## [1.1.0] - 2026-08-26
+
+### Added
+
+- API keys can be renamed from the dashboard, so a key's name can stay meaningful without revoking and recreating it.
+- A report's expiry can be extended from the dashboard with one-day, one-week, or 30-day presets counted from the moment of the change, within the instance retention limits. The agent API accepts the same `ttlSeconds` field when updating a draft.
+
+### Changed
+
+- A report's title in the dashboard now opens the shared report directly, and the open-report link looks like the other row actions instead of a plain text link.
+- The report list shows the expiry date in the device's regional date format, with the remaining time in parentheses.
+
+### Fixed
+
+- Share-preview images are now served with a relaxed cross-origin resource policy, so browser-based link-preview checkers can display the social card image instead of a broken placeholder.
+- The Windows skill helper no longer crashes while waiting for connection approval when PowerShell 7 runs with a non en-US regional format, which previously lost the approval and left the device unconnected.
+- The CLI now accepts draft IDs that start with `-` for `inspect`, `disable`, `enable`, and `delete` instead of failing with an unknown option error, and newly generated draft IDs avoid a leading dash.
+
+## [1.0.1] - 2026-08-26
+
+### Fixed
+
+- Added the repository metadata that npm provenance verification requires to the published `yaaps-ai` package.
+
 ## [1.0.0] - 2026-08-26
 
 Initial release.

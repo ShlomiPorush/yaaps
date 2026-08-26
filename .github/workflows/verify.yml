@@ -1,10 +1,10 @@
 name: Verify
 
+# Pull requests are the merge gate, the weekly schedule catches drift, and a
+# release tag reruns full verification before publishing — so pushes to main
+# deliberately trigger nothing to avoid running every check twice per merge.
 on:
   pull_request:
-  push:
-    branches:
-      - main
   schedule:
     - cron: "17 2 * * 1"
   workflow_dispatch:

@@ -1,5 +1,11 @@
 #!/usr/bin/env node
 
-import { createProgram } from "./program.js";
+import { createProgram, escapeDraftIdOperands } from "./program.js";
 
-await createProgram().parseAsync(process.argv);
+const program = createProgram();
+await program.parseAsync(
+  escapeDraftIdOperands(program, process.argv.slice(2)),
+  {
+    from: "user",
+  },
+);

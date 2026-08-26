@@ -114,7 +114,11 @@ export class DraftStorage {
     return this.#operations.run(async () => {
       validateHtmlDocument(input.html);
       const blob = await this.blobs.store(input.html);
-      const draftId = randomBytes(24).toString("base64url");
+      // A leading "-" is valid base64url but hostile to command-line tools.
+      let draftId = randomBytes(24).toString("base64url");
+      while (draftId.startsWith("-")) {
+        draftId = randomBytes(24).toString("base64url");
+      }
       const createdAt = new Date().toISOString();
 
       await this.database.transaction().execute(async (transaction) => {
@@ -323,6 +327,7 @@ export class DraftStorage {
   async updateForOwner(input: {
     apiKeyId: string | null;
     draftId: string;
+    expiresAt?: string;
     ownerId: string;
     status?: DraftsTable["status"];
     title?: string | null;
@@ -331,10 +336,14 @@ export class DraftStorage {
       const updatedAt = new Date().toISOString();
       return this.database.transaction().execute(async (transaction) => {
         const changes: {
+          expires_at?: string;
           status?: DraftsTable["status"];
           title?: string | null;
           updated_at: string;
         } = { updated_at: updatedAt };
+        if (input.expiresAt !== undefined) {
+          changes.expires_at = input.expiresAt;
+        }
         if (input.status !== undefined) {
           changes.status = input.status;
         }
@@ -355,6 +364,7 @@ export class DraftStorage {
           action: "draft.updated",
           apiKeyId: input.apiKeyId,
           metadata: {
+            expiryChanged: input.expiresAt !== undefined,
             status: input.status,
             titleChanged: input.title !== undefined,
           },

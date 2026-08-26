@@ -1,6 +1,6 @@
 {
   "name": "yaaps-workspace",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "Self-hosted HTML report publishing for agents.",
   "license": "MIT",
@@ -31,7 +31,7 @@
     "test:load": "vitest --config config/vitest.config.ts run apps/server/src/reports/load.test.ts",
     "test:unit": "vitest --config config/vitest.config.ts run",
     "test:watch": "vitest --config config/vitest.config.ts",
-    "test:workflows": "bash tests/workflows/workflows.sh",
+    "test:workflows": "node --test tests/workflows/deferred-upgrades.test.mjs && bash tests/workflows/workflows.sh",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "verify": "bash .github/tools/verify.sh",
     "version:sync": "node .github/tools/sync-version.mjs"

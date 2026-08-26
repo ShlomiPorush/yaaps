@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const PRODUCT_NAME = "YAAPS" as const;
 export const DEFAULT_SERVICE_ORIGIN = "https://yaaps.net" as const;
-export const FOUNDATION_VERSION = "1.0.0" as const;
+export const FOUNDATION_VERSION = "1.1.0" as const;
 
 export const RETENTION_LIMITS_SECONDS = {
   default: 7 * 24 * 60 * 60,
@@ -34,8 +34,14 @@ export const updateDraftRequestSchema = z
   .object({
     status: draftStatusSchema.optional(),
     title: draftTitleSchema.nullable().optional(),
+    ttlSeconds: ttlSecondsSchema.optional(),
   })
-  .refine((value) => value.status !== undefined || value.title !== undefined);
+  .refine(
+    (value) =>
+      value.status !== undefined ||
+      value.title !== undefined ||
+      value.ttlSeconds !== undefined,
+  );
 
 export const draftSummarySchema = z.object({
   createdAt: z.iso.datetime(),
@@ -137,6 +143,9 @@ export const registerOptionsRequestSchema = z.object({
 export const recoveryRequestSchema = z.object({ code: z.string().min(1) });
 export const apiKeyLabelSchema = z.string().trim().min(1).max(100);
 export const createApiKeyRequestSchema = z.object({
+  label: apiKeyLabelSchema,
+});
+export const updateApiKeyRequestSchema = z.object({
   label: apiKeyLabelSchema,
 });
 export const apiKeyPrefixSchema = z.string().regex(/^yaaps_[A-Za-z0-9_-]{10}$/);

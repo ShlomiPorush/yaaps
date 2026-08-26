@@ -37,13 +37,21 @@ test_compose_definitions() {
     docker "${COMPOSE_ARGUMENTS[@]}" config --quiet
   fi
   compose_arguments "$PRODUCTION_COMPOSE_PATH"
-  YAAPS_IMAGE="ghcr.io/example/yaaps@sha256:verification" \
-  YAAPS_HOSTNAME="yaaps.net" \
-  YAAPS_PUBLIC_ORIGIN="https://yaaps.net" \
-  YAAPS_RP_ID="yaaps.net" \
-  YAAPS_TRAEFIK_CERT_RESOLVER="verification" \
-  YAAPS_TRAEFIK_NETWORK="verification" \
-    docker "${COMPOSE_ARGUMENTS[@]}" config --quiet
+  # The production definition requires the deployment .env so a real
+  # deployment fails fast when the file is missing. Validation without a
+  # local .env runs against an empty stand-in and removes it afterwards;
+  # an existing .env is used as-is and never modified.
+  if [[ -f "$REPOSITORY_ROOT/.env" ]]; then
+    YAAPS_HOSTNAME="yaaps.net" \
+      docker "${COMPOSE_ARGUMENTS[@]}" config --quiet
+  else
+    local compose_status=0
+    : >"$REPOSITORY_ROOT/.env"
+    YAAPS_HOSTNAME="yaaps.net" \
+      docker "${COMPOSE_ARGUMENTS[@]}" config --quiet || compose_status=$?
+    rm -f "$REPOSITORY_ROOT/.env"
+    return "$compose_status"
+  fi
 }
 
 invoke_verification() {

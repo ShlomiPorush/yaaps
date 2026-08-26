@@ -2,6 +2,7 @@ import type {
   AdminUserSummary,
   AdminDraftSummary,
   ApiKeyListResponse,
+  ApiKeySummary,
   ApproveDeviceConnectionResponse,
   CreatedApiKeyResponse,
   CreatedInvitationResponse,
@@ -10,6 +11,7 @@ import type {
   DraftVersionListResponse,
   InvitationSummary,
   PendingDeviceConnection,
+  PublicServiceMetadata,
   UserRole,
 } from "@yaaps/contracts";
 
@@ -74,13 +76,21 @@ export class DashboardApi {
 
   async updateDraft(
     draftId: string,
-    update: { status?: "disabled" | "enabled"; title?: string | null },
+    update: {
+      status?: "disabled" | "enabled";
+      title?: string | null;
+      ttlSeconds?: number;
+    },
   ): Promise<DraftSummary> {
     return this.#mutate(
       `/dashboard/api/drafts/${encodeURIComponent(draftId)}`,
       "PATCH",
       update,
     );
+  }
+
+  async serviceMetadata(): Promise<PublicServiceMetadata> {
+    return this.#get("/api/meta");
   }
 
   async deleteDraft(draftId: string): Promise<void> {
@@ -100,6 +110,12 @@ export class DashboardApi {
 
   async revokeApiKey(id: string): Promise<void> {
     await this.#mutate(`/auth/api-keys/${encodeURIComponent(id)}`, "DELETE");
+  }
+
+  async renameApiKey(id: string, label: string): Promise<ApiKeySummary> {
+    return this.#mutate(`/auth/api-keys/${encodeURIComponent(id)}`, "PATCH", {
+      label,
+    });
   }
 
   async regenerateRecoveryCodes(): Promise<{ recoveryCodes: string[] }> {

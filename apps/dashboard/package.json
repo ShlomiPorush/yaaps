@@ -1,6 +1,6 @@
 {
   "name": "@yaaps/dashboard",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "YAAPS administration dashboard.",
   "license": "MIT",
@@ -8,6 +8,7 @@
   "scripts": {
     "build": "tsc --noEmit -p tsconfig.json && vite build",
     "dev": "vite --host 127.0.0.1",
+    "pretypecheck": "npm run build --workspace @yaaps/contracts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {

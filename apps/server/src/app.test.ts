@@ -212,6 +212,12 @@ describe("foundation server", () => {
       "<!doctype html><title>YAAPS dashboard</title>",
       "utf8",
     );
+    for (const imageName of ["og-site.png", "og-report.png"]) {
+      await writeFile(
+        path.join(dashboardDirectory, imageName),
+        Buffer.from([0x89, 0x50, 0x4e, 0x47]),
+      );
+    }
     const application = await buildApplication({
       dashboardDirectory,
       dataDirectory,
@@ -231,6 +237,19 @@ describe("foundation server", () => {
       expect(response.headers["content-type"]).toContain("text/html");
       expect(response.body).toContain("YAAPS dashboard");
       expect(response.headers["x-robots-tag"]).toBeUndefined();
+    }
+
+    for (const imageName of ["og-site.png", "og-report.png"]) {
+      const image = await application.inject({
+        method: "GET",
+        url: `/${imageName}`,
+      });
+
+      expect(image.statusCode).toBe(200);
+      expect(image.headers["content-type"]).toBe("image/png");
+      expect(image.headers["cross-origin-resource-policy"]).toBe(
+        "cross-origin",
+      );
     }
 
     const robots = await application.inject({

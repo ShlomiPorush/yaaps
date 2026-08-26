@@ -10,6 +10,7 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  formatDeviceDate,
   localeDocuments,
   type Locale,
   type LocaleDocument,
@@ -25,6 +26,15 @@ const draft = {
   status: "enabled" as const,
   title: "Quarterly report",
   updatedAt: "2026-08-24T09:00:00.000Z",
+};
+
+const serviceMetadata = {
+  limits: {
+    defaultTtlSeconds: 7 * 24 * 60 * 60,
+    maximumHtmlBytes: 10 * 1024 * 1024,
+    maximumTtlSeconds: 30 * 24 * 60 * 60,
+    minimumTtlSeconds: 60 * 60,
+  },
 };
 
 function json(body: unknown, status = 200): Response {
@@ -122,6 +132,9 @@ describe("signed-in management dashboard", () => {
           resolveKeys = resolve;
         });
       }
+      if (url === "/api/meta") {
+        return Promise.resolve(json(serviceMetadata));
+      }
       return Promise.reject(new Error(`Unexpected request: ${url}`));
     });
 
@@ -133,7 +146,7 @@ describe("signed-in management dashboard", () => {
     expect(
       screen.queryByLabelText(localeDocuments.en.management.summary),
     ).not.toBeInTheDocument();
-    await waitFor(() => expect(fetchImplementation).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(fetchImplementation).toHaveBeenCalledTimes(3));
 
     resolveDrafts(json({ items: [], limit: 100, offset: 0, total: 0 }));
     resolveKeys(json({ items: [] }));
@@ -167,6 +180,9 @@ describe("signed-in management dashboard", () => {
           rejectKeys = reject;
         });
       }
+      if (url === "/api/meta") {
+        return Promise.resolve(json(serviceMetadata));
+      }
       return Promise.reject(new Error(`Unexpected request: ${url}`));
     });
 
@@ -175,7 +191,7 @@ describe("signed-in management dashboard", () => {
     expect(
       screen.queryByLabelText(localeDocuments.en.management.summary),
     ).not.toBeInTheDocument();
-    await waitFor(() => expect(fetchImplementation).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(fetchImplementation).toHaveBeenCalledTimes(3));
     rejectDrafts(new Error("Draft request failed"));
     rejectKeys(new Error("Key request failed"));
 
@@ -244,6 +260,82 @@ describe("signed-in management dashboard", () => {
         method: "PATCH",
       }),
     );
+  });
+
+  it("opens the public report from its title as well as the dedicated link", async () => {
+    const fetchImplementation = vi.fn<typeof fetch>(async (input) => {
+      const url = String(input);
+      if (url.startsWith("/dashboard/api/drafts?")) {
+        return json({ items: [draft], limit: 100, offset: 0, total: 1 });
+      }
+      if (url === "/auth/api-keys") return json({ items: [] });
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    renderDashboard(fetchImplementation, "reports");
+
+    const titleLink = await screen.findByRole("link", { name: draft.title });
+    expect(titleLink).toHaveAttribute("href", draft.publicUrl);
+    expect(titleLink).toHaveAttribute("target", "_blank");
+    const openLink = screen.getByRole("link", {
+      name: localeDocuments.en.management.openReport,
+    });
+    expect(openLink).toHaveAttribute("href", draft.publicUrl);
+    expect(
+      screen.getByRole("heading", { level: 3, name: draft.title }),
+    ).toContainElement(titleLink);
+  });
+
+  it("extends a report's expiry with a preset TTL from now", async () => {
+    document.cookie = "yaaps_csrf=csrf-token; Path=/";
+    const extendedExpiry = new Date(
+      Date.now() + 7 * 24 * 60 * 60 * 1_000,
+    ).toISOString();
+    const fetchImplementation = vi.fn<typeof fetch>(async (input, init) => {
+      const url = String(input);
+      if (url.startsWith("/dashboard/api/drafts?") && !init?.method) {
+        return json({ items: [draft], limit: 100, offset: 0, total: 1 });
+      }
+      if (url === "/auth/api-keys") return json({ items: [] });
+      if (url === "/api/meta") return json(serviceMetadata);
+      if (url.endsWith(draft.id) && init?.method === "PATCH") {
+        return json({ ...draft, expiresAt: extendedExpiry });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    const { container } = renderDashboard(fetchImplementation, "reports");
+
+    await screen.findByText(draft.title);
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: localeDocuments.en.management.extend,
+      }),
+    );
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: localeDocuments.en.management.extendWeek,
+      }),
+    );
+
+    await waitFor(() =>
+      expect(fetchImplementation).toHaveBeenCalledWith(
+        `/dashboard/api/drafts/${draft.id}`,
+        expect.objectContaining({
+          body: JSON.stringify({ ttlSeconds: 7 * 24 * 60 * 60 }),
+          headers: expect.objectContaining({ "x-csrf-token": "csrf-token" }),
+          method: "PATCH",
+        }),
+      ),
+    );
+    await waitFor(() => {
+      const meta = container.querySelector(".draft-meta");
+      expect(meta?.textContent).toContain(formatDeviceDate(extendedExpiry));
+      expect(meta?.textContent).toContain("left)");
+    });
+    expect(
+      screen.getByRole("button", {
+        name: localeDocuments.en.management.extend,
+      }),
+    ).toBeInTheDocument();
   });
 
   it("requires a second explicit action before permanently deleting a report", async () => {
@@ -363,6 +455,58 @@ describe("signed-in management dashboard", () => {
     const storedPrefix = screen.getByText(`${keyPrefix}…`);
     expect(storedPrefix).toBeVisible();
     expect(storedPrefix).toHaveAttribute("dir", "ltr");
+  });
+
+  it("renames an API key in place with CSRF", async () => {
+    document.cookie = "yaaps_csrf=csrf-token; Path=/";
+    const keyId = "8f7c1ca3-edbc-4b4b-b349-d45322728936";
+    const storedKey = {
+      createdAt: "2026-08-24T08:00:00.000Z",
+      id: keyId,
+      label: "Local agent",
+      lastUsedAt: null,
+      prefix: "yaaps_prefix",
+    };
+    const fetchImplementation = vi.fn<typeof fetch>(async (input, init) => {
+      const url = String(input);
+      if (url.startsWith("/dashboard/api/drafts?")) {
+        return json({ items: [], limit: 100, offset: 0, total: 0 });
+      }
+      if (url === "/auth/api-keys") {
+        return json({ items: [storedKey] });
+      }
+      if (url === `/auth/api-keys/${keyId}` && init?.method === "PATCH") {
+        return json({ ...storedKey, label: "Weekly reports" });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    renderDashboard(fetchImplementation, "settings");
+
+    await screen.findByText(storedKey.label);
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: localeDocuments.en.management.rename,
+      }),
+    );
+    fireEvent.change(screen.getByDisplayValue(storedKey.label), {
+      target: { value: "Weekly reports" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: localeDocuments.en.management.renameSave,
+      }),
+    );
+
+    await screen.findByText("Weekly reports");
+    expect(screen.queryByText(storedKey.label)).not.toBeInTheDocument();
+    expect(fetchImplementation).toHaveBeenCalledWith(
+      `/auth/api-keys/${keyId}`,
+      expect.objectContaining({
+        body: JSON.stringify({ label: "Weekly reports" }),
+        headers: expect.objectContaining({ "x-csrf-token": "csrf-token" }),
+        method: "PATCH",
+      }),
+    );
   });
 
   it("isolates displayed recovery codes from Hebrew page direction", async () => {

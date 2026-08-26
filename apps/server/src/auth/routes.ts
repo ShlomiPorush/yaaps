@@ -9,6 +9,7 @@ import {
   createInvitationRequestSchema,
   invitationOptionsRequestSchema,
   recoveryRequestSchema,
+  updateApiKeyRequestSchema,
 } from "@yaaps/contracts";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
@@ -282,6 +283,18 @@ export async function registerAuthenticationRoutes(
       const session = await mutatingSession(request);
       await options.repository.revokeApiKey(session.userId, request.params.id);
       return reply.code(204).send();
+    },
+  );
+  application.patch<{ Params: { id: string } }>(
+    "/auth/api-keys/:id",
+    async (request) => {
+      const session = await mutatingSession(request);
+      const body = updateApiKeyRequestSchema.parse(request.body);
+      return options.repository.renameApiKey(
+        session.userId,
+        request.params.id,
+        body.label,
+      );
     },
   );
   application.post("/auth/invitations", async (request) => {

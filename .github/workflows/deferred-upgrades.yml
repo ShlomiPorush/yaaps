@@ -1,0 +1,66 @@
+name: Deferred upgrade review
+
+on:
+  schedule:
+    - cron: "23 6 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deferred-upgrade-review
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: 24.17.0
+
+jobs:
+  review:
+    name: Check deferred upgrades
+    permissions:
+      contents: read
+      issues: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Evaluate deferred upgrades
+        id: evaluate
+        env:
+          RESULT_PATH: ${{ runner.temp }}/deferred-upgrades.json
+        run: >-
+          node ./.github/tools/check-deferred-upgrades.mjs
+          --result "$RESULT_PATH"
+          --summary "$GITHUB_STEP_SUMMARY"
+          --github-output "$GITHUB_OUTPUT"
+      - name: Open discussions that are ready
+        if: steps.evaluate.outputs.ready_count != '0'
+        shell: bash
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RESULT_PATH: ${{ runner.temp }}/deferred-upgrades.json
+        run: |
+          set -Eeuo pipefail
+          while IFS= read -r check_id; do
+            tracking_key="$(jq -r --arg id "$check_id" '.checks[] | select(.id == $id) | .trackingKey' "$RESULT_PATH")"
+            existing_count="$(gh api --paginate --slurp "repos/$GH_REPO/issues?state=all&per_page=100" | jq --arg key "$tracking_key" '[.[][] | select(.pull_request == null) | select((.body // "") | contains($key))] | length')"
+            if [[ "$existing_count" != "0" ]]; then
+              printf 'Discussion already exists for %s.\n' "$check_id" >>"$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+
+            title="$(jq -r --arg id "$check_id" '.checks[] | select(.id == $id) | .issueTitle' "$RESULT_PATH")"
+            body_path="$RUNNER_TEMP/$check_id-issue.md"
+            jq -r --arg id "$check_id" '.checks[] | select(.id == $id) | .issueBody' "$RESULT_PATH" >"$body_path"
+            issue_url="$(gh issue create --repo "$GH_REPO" --title "$title" --body-file "$body_path" --label dependencies --label enhancement --label javascript)"
+            printf 'Opened discussion for %s: %s\n' "$check_id" "$issue_url" >>"$GITHUB_STEP_SUMMARY"
+          done < <(jq -r '.checks[] | select(.ready == true) | .id' "$RESULT_PATH")
