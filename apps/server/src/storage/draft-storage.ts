@@ -114,7 +114,11 @@ export class DraftStorage {
     return this.#operations.run(async () => {
       validateHtmlDocument(input.html);
       const blob = await this.blobs.store(input.html);
-      const draftId = randomBytes(24).toString("base64url");
+      // A leading "-" is valid base64url but hostile to command-line tools.
+      let draftId = randomBytes(24).toString("base64url");
+      while (draftId.startsWith("-")) {
+        draftId = randomBytes(24).toString("base64url");
+      }
       const createdAt = new Date().toISOString();
 
       await this.database.transaction().execute(async (transaction) => {
