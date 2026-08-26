@@ -10,6 +10,7 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  formatDeviceDate,
   localeDocuments,
   type Locale,
   type LocaleDocument,
@@ -25,6 +26,15 @@ const draft = {
   status: "enabled" as const,
   title: "Quarterly report",
   updatedAt: "2026-08-24T09:00:00.000Z",
+};
+
+const serviceMetadata = {
+  limits: {
+    defaultTtlSeconds: 7 * 24 * 60 * 60,
+    maximumHtmlBytes: 10 * 1024 * 1024,
+    maximumTtlSeconds: 30 * 24 * 60 * 60,
+    minimumTtlSeconds: 60 * 60,
+  },
 };
 
 function json(body: unknown, status = 200): Response {
@@ -122,6 +132,9 @@ describe("signed-in management dashboard", () => {
           resolveKeys = resolve;
         });
       }
+      if (url === "/api/meta") {
+        return Promise.resolve(json(serviceMetadata));
+      }
       return Promise.reject(new Error(`Unexpected request: ${url}`));
     });
 
@@ -133,7 +146,7 @@ describe("signed-in management dashboard", () => {
     expect(
       screen.queryByLabelText(localeDocuments.en.management.summary),
     ).not.toBeInTheDocument();
-    await waitFor(() => expect(fetchImplementation).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(fetchImplementation).toHaveBeenCalledTimes(3));
 
     resolveDrafts(json({ items: [], limit: 100, offset: 0, total: 0 }));
     resolveKeys(json({ items: [] }));
@@ -167,6 +180,9 @@ describe("signed-in management dashboard", () => {
           rejectKeys = reject;
         });
       }
+      if (url === "/api/meta") {
+        return Promise.resolve(json(serviceMetadata));
+      }
       return Promise.reject(new Error(`Unexpected request: ${url}`));
     });
 
@@ -175,7 +191,7 @@ describe("signed-in management dashboard", () => {
     expect(
       screen.queryByLabelText(localeDocuments.en.management.summary),
     ).not.toBeInTheDocument();
-    await waitFor(() => expect(fetchImplementation).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(fetchImplementation).toHaveBeenCalledTimes(3));
     rejectDrafts(new Error("Draft request failed"));
     rejectKeys(new Error("Key request failed"));
 
@@ -267,6 +283,59 @@ describe("signed-in management dashboard", () => {
     expect(
       screen.getByRole("heading", { level: 3, name: draft.title }),
     ).toContainElement(titleLink);
+  });
+
+  it("extends a report's expiry with a preset TTL from now", async () => {
+    document.cookie = "yaaps_csrf=csrf-token; Path=/";
+    const extendedExpiry = new Date(
+      Date.now() + 7 * 24 * 60 * 60 * 1_000,
+    ).toISOString();
+    const fetchImplementation = vi.fn<typeof fetch>(async (input, init) => {
+      const url = String(input);
+      if (url.startsWith("/dashboard/api/drafts?") && !init?.method) {
+        return json({ items: [draft], limit: 100, offset: 0, total: 1 });
+      }
+      if (url === "/auth/api-keys") return json({ items: [] });
+      if (url === "/api/meta") return json(serviceMetadata);
+      if (url.endsWith(draft.id) && init?.method === "PATCH") {
+        return json({ ...draft, expiresAt: extendedExpiry });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    const { container } = renderDashboard(fetchImplementation, "reports");
+
+    await screen.findByText(draft.title);
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: localeDocuments.en.management.extend,
+      }),
+    );
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: localeDocuments.en.management.extendWeek,
+      }),
+    );
+
+    await waitFor(() =>
+      expect(fetchImplementation).toHaveBeenCalledWith(
+        `/dashboard/api/drafts/${draft.id}`,
+        expect.objectContaining({
+          body: JSON.stringify({ ttlSeconds: 7 * 24 * 60 * 60 }),
+          headers: expect.objectContaining({ "x-csrf-token": "csrf-token" }),
+          method: "PATCH",
+        }),
+      ),
+    );
+    await waitFor(() => {
+      const meta = container.querySelector(".draft-meta");
+      expect(meta?.textContent).toContain(formatDeviceDate(extendedExpiry));
+      expect(meta?.textContent).toContain("left)");
+    });
+    expect(
+      screen.getByRole("button", {
+        name: localeDocuments.en.management.extend,
+      }),
+    ).toBeInTheDocument();
   });
 
   it("requires a second explicit action before permanently deleting a report", async () => {

@@ -281,6 +281,36 @@ describe("dashboard report management boundary", () => {
       title: "Reviewed report",
     });
 
+    const requestedTtlSeconds = 14 * 24 * 60 * 60;
+    const beforeExtension = Date.now();
+    const extended = await application.inject({
+      headers: browserHeaders(ownerCookies, true),
+      method: "PATCH",
+      payload: { ttlSeconds: requestedTtlSeconds },
+      url: `/dashboard/api/drafts/${stored.draftId}`,
+    });
+    expect(extended.statusCode).toBe(200);
+    const newExpiry = Date.parse(
+      draftSummarySchema.parse(extended.json()).expiresAt,
+    );
+    expect(newExpiry).toBeGreaterThanOrEqual(
+      beforeExtension + requestedTtlSeconds * 1_000,
+    );
+    expect(newExpiry).toBeLessThanOrEqual(
+      Date.now() + requestedTtlSeconds * 1_000,
+    );
+
+    const invalidTtl = await application.inject({
+      headers: browserHeaders(ownerCookies, true),
+      method: "PATCH",
+      payload: { ttlSeconds: 365 * 24 * 60 * 60 },
+      url: `/dashboard/api/drafts/${stored.draftId}`,
+    });
+    expect(invalidTtl.statusCode).toBe(400);
+    expect(publicErrorSchema.parse(invalidTtl.json()).error.code).toBe(
+      "INVALID_TTL",
+    );
+
     const deleted = await application.inject({
       headers: browserHeaders(ownerCookies, true),
       method: "DELETE",
@@ -299,6 +329,11 @@ describe("dashboard report management boundary", () => {
       .orderBy("id")
       .execute();
     expect(browserAudit).toEqual([
+      {
+        action: "draft.updated",
+        actor_api_key_id: null,
+        actor_user_id: ownerId,
+      },
       {
         action: "draft.updated",
         actor_api_key_id: null,
