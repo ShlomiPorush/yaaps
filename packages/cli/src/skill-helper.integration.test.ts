@@ -5,11 +5,14 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { execFile } from "node:child_process";
+import { execFile, spawnSync } from "node:child_process";
 
 import { afterEach, describe, expect, it } from "vitest";
 
 const execFileAsync = promisify(execFile);
+const pwshAvailable =
+  process.platform === "win32" &&
+  spawnSync("where.exe", ["pwsh"], { windowsHide: true }).status === 0;
 const temporaryPaths: string[] = [];
 
 afterEach(async () => {
@@ -600,5 +603,109 @@ describe.runIf(process.platform === "win32")(
         );
       }
     }, 15_000);
+
+    it.runIf(pwshAvailable)(
+      "connects under PowerShell 7 with a non en-US culture",
+      async () => {
+        const configDirectory = await mkdtemp(
+          path.join(tmpdir(), "yaaps-skill-culture-"),
+        );
+        temporaryPaths.push(configDirectory);
+        const expiresAt = new Date(Date.now() + 60_000).toISOString();
+        const server = createServer((request, response) => {
+          request.on("data", () => {});
+          request.on("end", () => {
+            response.setHeader("content-type", "application/json");
+            if (request.url === "/auth/device-connections") {
+              response.statusCode = 201;
+              response.end(
+                JSON.stringify({
+                  deviceSecret: `yad_${"a".repeat(43)}`,
+                  expiresAt,
+                  intervalSeconds: 1,
+                  userCode: "ABCD-EFGH",
+                  verificationUrl:
+                    "https://share.example/dashboard/connect/approve",
+                  verificationUrlComplete:
+                    "https://share.example/dashboard/connect/approve?code=ABCD-EFGH",
+                }),
+              );
+            } else if (request.url === "/auth/device-connections/token") {
+              response.end(
+                JSON.stringify({
+                  apiKeyId: "8f7c1ca3-edbc-4b4b-b349-d45322728936",
+                  status: "approved",
+                }),
+              );
+            } else {
+              response.statusCode = 404;
+              response.end(
+                JSON.stringify({
+                  error: { code: "NOT_FOUND", message: "Missing" },
+                }),
+              );
+            }
+          });
+        });
+        await new Promise<void>((resolve) =>
+          server.listen(0, "127.0.0.1", resolve),
+        );
+        try {
+          const address = server.address();
+          if (!address || typeof address === "string")
+            throw new Error("Missing address");
+          const script = path.resolve(
+            "plugins/yaaps/skills/yaaps/scripts/yaaps.ps1",
+          );
+          // Unlike Windows PowerShell 5.1, PowerShell 7 deserializes ISO
+          // date strings into DateTime objects, so the helper must not
+          // round-trip them through culture-formatted strings; forcing
+          // de-DE makes such a round-trip fail deterministically.
+          const command = [
+            "$ErrorActionPreference = 'Stop'",
+            "[Globalization.CultureInfo]::DefaultThreadCurrentCulture = [Globalization.CultureInfo]::GetCultureInfo('de-DE')",
+            "[Globalization.CultureInfo]::CurrentCulture = [Globalization.CultureInfo]::GetCultureInfo('de-DE')",
+            "& $env:YAAPS_TEST_SCRIPT connect --api-url $env:YAAPS_TEST_ORIGIN --label 'Culture agent' --no-open",
+            "exit $LASTEXITCODE",
+          ].join("; ");
+          const connected = await execFileAsync(
+            "pwsh",
+            ["-NoLogo", "-NoProfile", "-Command", command],
+            {
+              encoding: "utf8",
+              env: {
+                ...process.env,
+                HOME: configDirectory,
+                YAAPS_CONFIG_DIR: configDirectory,
+                YAAPS_TEST_ORIGIN: `http://127.0.0.1:${address.port}`,
+                YAAPS_TEST_SCRIPT: script,
+              },
+              timeout: 10_000,
+              windowsHide: true,
+            },
+          );
+          const events = connected.stdout
+            .trim()
+            .split(/\r?\n/u)
+            .map((line) => JSON.parse(line) as Record<string, unknown>);
+          expect(events.map((event) => event.status)).toEqual([
+            "pending",
+            "approved",
+          ]);
+          expect(Date.parse(String(events[0]!.expiresAt))).toBe(
+            Date.parse(expiresAt),
+          );
+          const stored = JSON.parse(
+            await readFile(path.join(configDirectory, "config.json"), "utf8"),
+          ) as { apiKey: string };
+          expect(stored.apiKey).toMatch(/^yaaps_/u);
+        } finally {
+          await new Promise<void>((resolve, reject) =>
+            server.close((error) => (error ? reject(error) : resolve())),
+          );
+        }
+      },
+      15_000,
+    );
   },
 );
