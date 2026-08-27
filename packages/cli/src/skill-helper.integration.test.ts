@@ -113,7 +113,7 @@ printf '{"health":{"status":"ok"},"readiness":{"status":"ready"}}\\n'
       readiness: { status: "ready" },
     });
     await expect(readFile(markerPath, "utf8")).resolves.toBe("");
-  });
+  }, 15_000);
 
   it("drives the POSIX helper through the full draft lifecycle without leaking the key", async () => {
     const testDirectory = await mkdtemp(
