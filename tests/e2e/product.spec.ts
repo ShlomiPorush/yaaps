@@ -15,6 +15,7 @@ import {
 
 const BOOTSTRAP_SECRET = "yaaps-playwright-bootstrap-secret-2026";
 const SECURITY_REPORT_URL = `http://localhost:4174/d/${"S".repeat(32)}`;
+const CONNECTED_REPORT_URL = `http://localhost:4174/d/${"C".repeat(32)}`;
 const execFileAsync = promisify(execFile);
 const bashExecutable =
   process.platform === "win32"
@@ -43,6 +44,8 @@ const hebrew = JSON.parse(
     adminHeading: string;
     heading: string;
     loading: string;
+    resourcePolicyConnected: string;
+    resourcePolicyIsolated: string;
     summary: string;
   };
   dashboard: {
@@ -97,6 +100,9 @@ const english = JSON.parse(
     heading: string;
     keyLabel: string;
     loading: string;
+    resourcePolicyConnected: string;
+    resourcePolicyIsolated: string;
+    showVersions: string;
     summary: string;
   };
   navigation: {
@@ -607,8 +613,28 @@ test("completes the browser product lifecycle with real WebAuthn ceremonies", as
   });
   expect(published.status()).toBe(201);
   const publication = (await published.json()) as {
-    draft: { publicUrl: string };
+    draft: { id: string; publicUrl: string; resourcePolicy: string };
+    version: { resourcePolicy: string };
   };
+  expect(publication).toMatchObject({
+    draft: { resourcePolicy: "isolated" },
+    version: { resourcePolicy: "isolated" },
+  });
+  const connectedVersion = await page.request.post(
+    `/api/drafts/${publication.draft.id}/versions?resourcePolicy=connected`,
+    {
+      data: '<!doctype html><html><head><title>E2E report</title></head><body><h1>Published by Playwright</h1><img alt="External chart" src="https://assets.example.test/chart.png"></body></html>',
+      headers: {
+        authorization: `Bearer ${apiKey}`,
+        "content-type": "text/html",
+      },
+    },
+  );
+  expect(connectedVersion.status()).toBe(201);
+  expect(await connectedVersion.json()).toMatchObject({
+    draft: { resourcePolicy: "connected" },
+    version: { resourcePolicy: "connected", versionNumber: 2 },
+  });
 
   const releaseManagementRequests = await holdManagementRequests(page);
   await page.goto("/dashboard");
@@ -618,6 +644,56 @@ test("completes the browser product lifecycle with real WebAuthn ceremonies", as
   await expect(page.getByLabel(english.management.summary)).toBeVisible();
   const report = page.locator(".draft-item", { hasText: "E2E report" });
   await expect(report).toBeVisible();
+  await expect(
+    report.getByText(english.management.resourcePolicyConnected, {
+      exact: true,
+    }),
+  ).toHaveCount(1);
+  await report
+    .getByRole("button", { name: english.management.showVersions })
+    .click();
+  await expect(
+    report.getByText(english.management.resourcePolicyConnected, {
+      exact: true,
+    }),
+  ).toHaveCount(2);
+  await expect(
+    report.getByText(english.management.resourcePolicyIsolated, {
+      exact: true,
+    }),
+  ).toHaveCount(1);
+  await page
+    .getByRole("button", { name: english.actions.switchLanguage })
+    .click();
+  await expect(
+    report.getByText(hebrew.management.resourcePolicyConnected, {
+      exact: true,
+    }),
+  ).toHaveCount(2);
+  await expect(
+    report.getByText(hebrew.management.resourcePolicyIsolated, {
+      exact: true,
+    }),
+  ).toHaveCount(1);
+  await page.getByRole("button", { name: hebrew.actions.switchTheme }).click();
+  await expect(
+    report
+      .getByText(hebrew.management.resourcePolicyConnected, {
+        exact: true,
+      })
+      .first(),
+  ).toBeVisible();
+  await page.setViewportSize({ height: 844, width: 390 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  await page.setViewportSize({ height: 900, width: 1280 });
+  await page.getByRole("button", { name: hebrew.actions.switchTheme }).click();
+  await page
+    .getByRole("button", { name: hebrew.actions.switchLanguage })
+    .click();
   await report
     .getByRole("button", { name: english.management.disable })
     .click();
@@ -801,8 +877,14 @@ test("enforces the public report sandbox in Chromium", async ({ browser }) => {
   const response = await page.goto(SECURITY_REPORT_URL);
   expect(response?.status()).toBe(200);
   expect(response?.headers()["content-security-policy"]).toContain("sandbox");
+  expect(response?.headers()["content-security-policy"]).toContain(
+    "allow-popups",
+  );
   expect(response?.headers()["content-security-policy"]).not.toContain(
     "allow-scripts",
+  );
+  expect(response?.headers()["content-security-policy"]).not.toContain(
+    "allow-same-origin",
   );
   await expect(
     page.getByRole("heading", { name: "YAAPS isolation fixture" }),
@@ -841,5 +923,104 @@ test("enforces the public report sandbox in Chromium", async ({ browser }) => {
   await expect(page).toHaveURL(SECURITY_REPORT_URL);
   await page.waitForTimeout(500);
   expect(await readProbeCount()).toBe(0);
+  await context.close();
+});
+
+test("loads only connected presentation assets and keeps active content blocked", async ({
+  browser,
+}) => {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  const requestedAssets: string[] = [];
+  const testFont = readFileSync(
+    path.resolve(
+      "node_modules/@fontsource-variable/rubik/files/rubik-latin-wght-normal.woff2",
+    ),
+  );
+  const testImage = readFileSync(
+    path.resolve("apps/dashboard/public/og-report.png"),
+  );
+
+  await context.route("https://assets.example.test/**", async (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    requestedAssets.push(pathname);
+    if (pathname.endsWith(".css")) {
+      await route.fulfill({
+        body: [
+          '@font-face{font-family:"E2EExternal";src:url("https://assets.example.test/connected.woff2") format("woff2");font-display:block}',
+          '.external-font{font-family:"E2EExternal";background-image:url("https://assets.example.test/background.png")}',
+        ].join(""),
+        contentType: "text/css",
+        headers: { "access-control-allow-origin": "*" },
+        status: 200,
+      });
+      return;
+    }
+    await route.fulfill({
+      body: pathname.endsWith(".woff2") ? testFont : testImage,
+      contentType: pathname.endsWith(".woff2") ? "font/woff2" : "image/png",
+      headers: { "access-control-allow-origin": "*" },
+      status: 200,
+    });
+  });
+  await context.route("https://source.example.test/reference", (route) =>
+    route.fulfill({
+      body: "<!doctype html><html><body><h1>External source reached</h1></body></html>",
+      contentType: "text/html",
+      status: 200,
+    }),
+  );
+
+  const response = await page.goto(CONNECTED_REPORT_URL);
+  expect(response?.status()).toBe(200);
+  const policy = response?.headers()["content-security-policy"] ?? "";
+  expect(policy).toContain("sandbox");
+  expect(policy).toContain("allow-popups");
+  expect(policy).toContain("img-src data: https:");
+  expect(policy).toContain("font-src data: https:");
+  expect(policy).toContain("style-src 'unsafe-inline' https:");
+  expect(policy).toContain("connect-src 'none'");
+  expect(policy).not.toContain("allow-scripts");
+  expect(policy).not.toContain("allow-same-origin");
+  await expect(
+    page.getByRole("heading", { name: "YAAPS connected fixture" }),
+  ).toBeVisible();
+  await expect(page.getByAltText("Connected external image")).toBeVisible();
+  await page.evaluate(() => document.fonts.load('16px "E2EExternal"'));
+  await expect
+    .poll(() => requestedAssets)
+    .toEqual(
+      expect.arrayContaining([
+        "/background.png",
+        "/connected.css",
+        "/connected.png",
+        "/connected.woff2",
+      ]),
+    );
+  expect(
+    await page.evaluate(
+      () =>
+        (window as Window & { yaapsConnectedUnsafeScriptRan?: boolean })
+          .yaapsConnectedUnsafeScriptRan,
+    ),
+  ).toBeUndefined();
+  await page
+    .getByRole("button", { name: "Submit blocked connected form" })
+    .click();
+  await expect(page).toHaveURL(CONNECTED_REPORT_URL);
+  const probes = await context.request.get(
+    "http://localhost:4174/__e2e/probes",
+  );
+  expect(
+    ((await probes.json()) as { networkProbeCount: number }).networkProbeCount,
+  ).toBe(0);
+
+  const popupPromise = context.waitForEvent("page");
+  await page.getByRole("link", { name: "Open HTTPS source" }).click();
+  const popup = await popupPromise;
+  await expect(
+    popup.getByRole("heading", { name: "External source reached" }),
+  ).toBeVisible();
+  expect(popup.url()).toBe("https://source.example.test/reference");
   await context.close();
 });

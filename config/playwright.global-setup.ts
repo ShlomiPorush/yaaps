@@ -10,6 +10,7 @@ import { buildApplication } from "../apps/server/src/app.js";
 const MAIN_ORIGIN = "http://localhost:4173";
 const SECURITY_ORIGIN = "http://localhost:4174";
 const SECURITY_DRAFT_ID = "S".repeat(32);
+const CONNECTED_DRAFT_ID = "C".repeat(32);
 
 export default async function globalSetup(_config: FullConfig) {
   const mainDirectory = await mkdtemp(path.join(tmpdir(), "yaaps-e2e-main-"));
@@ -49,9 +50,30 @@ export default async function globalSetup(_config: FullConfig) {
     </script>
   </body>
 </html>`);
+  const connectedFixture = Buffer.from(`<!doctype html>
+<html>
+  <head>
+    <title>YAAPS connected fixture</title>
+    <link rel="stylesheet" href="https://assets.example.test/connected.css">
+  </head>
+  <body>
+    <h1>YAAPS connected fixture</h1>
+    <p class="external-font">External font proof</p>
+    <img alt="Connected external image" src="https://assets.example.test/connected.png">
+    <a href="https://source.example.test/reference" target="_blank" rel="noreferrer">Open HTTPS source</a>
+    <form action="/__e2e/network-probe" method="get">
+      <button id="connected-submit-probe" type="submit">Submit blocked connected form</button>
+    </form>
+    <script>
+      window.yaapsConnectedUnsafeScriptRan = true;
+      fetch("/__e2e/network-probe?source=connected-fetch");
+    </script>
+  </body>
+</html>`);
   const userId = randomUUID();
   const createdAt = new Date().toISOString();
   const blob = await security.yaapsData!.blobs.store(unsafeFixture);
+  const connectedBlob = await security.yaapsData!.blobs.store(connectedFixture);
   await security
     .yaapsData!.database.connection.insertInto("users")
     .values({
@@ -62,6 +84,19 @@ export default async function globalSetup(_config: FullConfig) {
       role: "user",
       status: "active",
       webauthn_user_id: null,
+    })
+    .execute();
+  await security
+    .yaapsData!.database.connection.insertInto("drafts")
+    .values({
+      created_at: createdAt,
+      expires_at: new Date(Date.now() + 60 * 60 * 1_000).toISOString(),
+      id: CONNECTED_DRAFT_ID,
+      latest_version_number: 1,
+      owner_id: userId,
+      status: "enabled",
+      title: "E2E connected fixture",
+      updated_at: createdAt,
     })
     .execute();
   await security
@@ -85,7 +120,22 @@ export default async function globalSetup(_config: FullConfig) {
       created_at: createdAt,
       draft_id: SECURITY_DRAFT_ID,
       id: randomUUID(),
+      resource_policy: "isolated",
       sha256: blob.sha256,
+      uploaded_by_api_key_id: null,
+      version_number: 1,
+    })
+    .execute();
+  await security
+    .yaapsData!.database.connection.insertInto("versions")
+    .values({
+      blob_key: connectedBlob.key,
+      byte_length: connectedBlob.byteLength,
+      created_at: createdAt,
+      draft_id: CONNECTED_DRAFT_ID,
+      id: randomUUID(),
+      resource_policy: "connected",
+      sha256: connectedBlob.sha256,
       uploaded_by_api_key_id: null,
       version_number: 1,
     })

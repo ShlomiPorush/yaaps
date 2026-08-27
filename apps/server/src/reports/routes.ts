@@ -8,7 +8,7 @@ import type {
 } from "../storage/draft-storage.js";
 
 export const ISOLATED_REPORT_CONTENT_SECURITY_POLICY = [
-  "sandbox",
+  "sandbox allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation",
   "default-src 'none'",
   "script-src 'none'",
   "connect-src 'none'",
@@ -23,7 +23,7 @@ export const ISOLATED_REPORT_CONTENT_SECURITY_POLICY = [
 ].join("; ");
 
 export const CONNECTED_REPORT_CONTENT_SECURITY_POLICY = [
-  "sandbox",
+  "sandbox allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation",
   "default-src 'none'",
   "script-src 'none'",
   "connect-src 'none'",

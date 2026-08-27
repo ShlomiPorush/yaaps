@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-import { DOCUMENT_LIMITS } from "@yaaps/contracts";
+import { DOCUMENT_LIMITS, type ReportResourcePolicy } from "@yaaps/contracts";
 import {
   generate as generateCss,
   parse as parseCss,
@@ -20,8 +20,6 @@ type HtmlChildNode = DefaultTreeAdapterMap["childNode"];
 type HtmlElement = DefaultTreeAdapterMap["element"];
 type HtmlTemplate = DefaultTreeAdapterMap["template"];
 type HtmlTextNode = DefaultTreeAdapterMap["textNode"];
-
-export type ResourcePolicy = "connected" | "isolated";
 
 const EMBEDDED_BITMAP =
   /^data:image\/(?:avif|gif|jpeg|png|webp);base64,[a-z0-9+/]+=*$/i;
@@ -131,7 +129,7 @@ async function normalizeResourceUrl(
   value: string,
   htmlDirectory: string,
   context: "bitmap" | "css",
-  resourcePolicy: ResourcePolicy,
+  resourcePolicy: ReportResourcePolicy,
 ): Promise<string> {
   const normalized = value.trim();
   if (normalized.startsWith("#")) return normalized;
@@ -172,7 +170,7 @@ async function normalizeCss(
   source: string,
   htmlDirectory: string,
   context: "declarationList" | "stylesheet" | "value",
-  resourcePolicy: ResourcePolicy,
+  resourcePolicy: ReportResourcePolicy,
 ): Promise<string> {
   let parseFailed = false;
   let tree;
@@ -254,7 +252,7 @@ function validateExplicitDocument(source: string): void {
 async function normalizeElement(
   element: HtmlElement,
   htmlDirectory: string,
-  resourcePolicy: ResourcePolicy,
+  resourcePolicy: ReportResourcePolicy,
 ): Promise<void> {
   const tagName = element.tagName.toLowerCase();
   if (
@@ -398,7 +396,7 @@ async function normalizeElement(
 
 export async function normalizeHtmlFile(
   filePath: string,
-  resourcePolicy: ResourcePolicy = "isolated",
+  resourcePolicy: ReportResourcePolicy = "isolated",
 ): Promise<Buffer> {
   const absolutePath = path.resolve(filePath);
   let input: Buffer;

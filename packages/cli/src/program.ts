@@ -5,6 +5,7 @@ import {
   DEFAULT_SERVICE_ORIGIN,
   draftIdSchema,
   FOUNDATION_VERSION,
+  type ReportResourcePolicy,
 } from "@yaaps/contracts";
 import { Command, InvalidArgumentError } from "commander";
 
@@ -28,7 +29,7 @@ import {
   type CliConfig,
 } from "./config.js";
 import { openExternalUrl } from "./browser.js";
-import { normalizeHtmlFile, type ResourcePolicy } from "./normalize.js";
+import { normalizeHtmlFile } from "./normalize.js";
 import { fetchServiceStatus } from "./status.js";
 import {
   generateApiKey,
@@ -80,7 +81,7 @@ function boundedIntegerOption(
   };
 }
 
-function resourcePolicyOption(value: string): ResourcePolicy {
+function resourcePolicyOption(value: string): ReportResourcePolicy {
   if (value !== "isolated" && value !== "connected") {
     throw new InvalidArgumentError(
       "--mode must be either isolated or connected.",
@@ -428,7 +429,7 @@ export function createProgram(dependencies: ProgramDependencies = {}): Command {
         category?: string;
         draftId?: string;
         json?: boolean;
-        mode: ResourcePolicy;
+        mode: ReportResourcePolicy;
         newDraft?: boolean;
         title?: string;
         ttl?: number;
@@ -561,7 +562,7 @@ export function createProgram(dependencies: ProgramDependencies = {}): Command {
         writeOutput(
           options.json
             ? JSON.stringify(result, null, 2)
-            : `${draft.id}  ${draft.status}  ${draft.title ?? "Untitled"}\n${draft.publicUrl}\n${versions.total} versions; latest v${draft.latestVersionNumber}.`,
+            : `${draft.id}  ${draft.status}  ${draft.title ?? "Untitled"}\n${draft.publicUrl}\nResource policy: ${draft.resourcePolicy}.\n${versions.total} versions; latest v${draft.latestVersionNumber}.`,
         );
       });
     },

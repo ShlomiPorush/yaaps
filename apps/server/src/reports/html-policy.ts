@@ -105,27 +105,7 @@ function validateCss(
 
   walkCss(tree, (node) => {
     if (node.type === "Atrule" && node.name.toLowerCase() === "import") {
-      let importUrl: string | undefined;
-      if (node.prelude) {
-        walkCss(node.prelude, (child) => {
-          if (
-            importUrl === undefined &&
-            (child.type === "String" || child.type === "Url")
-          ) {
-            importUrl = child.value;
-          }
-        });
-      }
-      if (
-        resourcePolicy !== "connected" ||
-        importUrl === undefined ||
-        !isHttpsUrl(importUrl)
-      ) {
-        fail(
-          "CSS_NETWORK_RESOURCE",
-          "CSS imports must use HTTPS and require the connected resource policy.",
-        );
-      }
+      fail("CSS_NETWORK_RESOURCE", "CSS imports are not allowed.");
     }
     if (
       node.type === "Function" &&
@@ -161,7 +141,12 @@ function validateCss(
 
 function isHttpsUrl(value: string): boolean {
   try {
-    return new URL(value).protocol === "https:";
+    const parsed = new URL(value);
+    return (
+      parsed.protocol === "https:" &&
+      parsed.username === "" &&
+      parsed.password === ""
+    );
   } catch {
     return false;
   }
@@ -237,18 +222,7 @@ function validateElement(
     if (name === "srcdoc") {
       fail("SRCDOC_BLOCKED", "The srcdoc attribute is not allowed.");
     }
-    if (
-      BLOCKED_RESOURCE_ATTRIBUTES.has(name) &&
-      !(
-        name === "srcset" &&
-        resourcePolicy === "connected" &&
-        ["img", "source"].includes(tagName) &&
-        value
-          .split(",")
-          .map((candidate) => candidate.trim().split(/\s+/u)[0])
-          .every((url) => url !== undefined && isHttpsUrl(url))
-      )
-    ) {
+    if (BLOCKED_RESOURCE_ATTRIBUTES.has(name)) {
       fail(
         "RESOURCE_BLOCKED",
         `The ${name} resource attribute is not allowed.`,
@@ -262,7 +236,7 @@ function validateElement(
       ) {
         fail(
           "RESOURCE_BLOCKED",
-          "Image sources must be embedded bitmap data URLs.",
+          "Image sources must be embedded bitmap data URLs or use HTTPS with the connected resource policy.",
         );
       }
     }

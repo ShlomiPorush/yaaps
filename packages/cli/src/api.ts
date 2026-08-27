@@ -3,6 +3,7 @@ import {
   draftSummarySchema,
   draftVersionListResponseSchema,
   publishDraftResponseSchema,
+  type ReportResourcePolicy,
   type DraftListResponse,
   type DraftStatus,
   type DraftSummary,
@@ -11,7 +12,6 @@ import {
 } from "@yaaps/contracts";
 
 import { raiseRequestError, requestUrl } from "./http.js";
-import type { ResourcePolicy } from "./normalize.js";
 
 interface Parser<T> {
   parse(value: unknown): T;
@@ -26,7 +26,7 @@ export interface PublishOptions {
   category?: string;
   draftId?: string;
   html: Uint8Array;
-  resourcePolicy: ResourcePolicy;
+  resourcePolicy: ReportResourcePolicy;
   title?: string;
   ttlSeconds?: number;
 }

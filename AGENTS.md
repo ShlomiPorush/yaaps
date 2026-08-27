@@ -4,7 +4,7 @@ YAAPS turns HTML reports created by AI agents into temporary, shareable links. T
 
 ## Product boundary
 
-YAAPS publishes temporary, self-contained HTML reports from authenticated agents. Public readers use high-entropy capability URLs. The dashboard supports passkeys, drafts, immutable versions, API keys, and administration. Registration is invitation-based, with optional open self-registration through `YAAPS_OPEN_REGISTRATION`.
+YAAPS publishes temporary HTML reports from authenticated agents. Each immutable version uses a publisher-selected resource policy: isolated reports are self-contained, while connected reports may load HTTPS presentation assets. Public readers use high-entropy capability URLs. The dashboard supports passkeys, drafts, immutable versions, API keys, and administration. Registration is invitation-based, with optional open self-registration through `YAAPS_OPEN_REGISTRATION`.
 
 Do not expand the product into arbitrary file hosting, organizations, collaboration, billing, permanent archival storage, executable reports, or a generic rendering platform without an explicit product decision.
 
@@ -26,7 +26,7 @@ These are non-negotiable boundaries unless the repository owner explicitly appro
 - API keys and recovery codes are displayed once and stored only as hashes plus non-secret identifying metadata.
 - Public report routes reveal no owner, local-path, credential, or private audit metadata.
 - HTML is parsed and validated on the server even when the CLI already validated it.
-- Reports cannot execute scripts, submit forms, embed frames/plugins, or make network requests.
+- Reports cannot execute scripts, submit forms, embed frames/plugins, or make programmatic network requests. Isolated versions make no automatic external requests; connected versions may load only HTTPS images, fonts, and stylesheets under their server-controlled policy.
 - Every `/d/*` HTML response receives a server-controlled CSP `sandbox` without `allow-same-origin` or `allow-scripts`, plus the supporting isolation headers asserted by the report route tests.
 - Uploaded filenames never become filesystem paths. Immutable blobs are written atomically.
 - SQLite metadata and the HTML blob directory are one logical backup unit.

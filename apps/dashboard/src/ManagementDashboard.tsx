@@ -4,6 +4,7 @@ import type {
   DraftSummary,
   DraftVersionSummary,
   PublicServiceMetadata,
+  ReportResourcePolicy,
 } from "@yaaps/contracts";
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 
@@ -24,16 +25,10 @@ const existingCategoryPrefix = "existing:";
 const newCategoryChoice = "new";
 const noCategoryChoice = "";
 
-type ResourcePolicy = "isolated" | "connected";
-
-// The API contract adds this field alongside the dashboard work. Keeping the
-// compatibility read here lets this commit remain isolated until both commits
-// are integrated on the feature branch.
 function resourcePolicyOf(
   summary: DraftSummary | DraftVersionSummary,
-): ResourcePolicy {
-  return (summary as unknown as { resourcePolicy: ResourcePolicy })
-    .resourcePolicy;
+): ReportResourcePolicy {
+  return summary.resourcePolicy;
 }
 
 function ResourcePolicyBadge({
@@ -41,7 +36,7 @@ function ResourcePolicyBadge({
   policy,
 }: {
   copy: LocaleDocument;
-  policy: ResourcePolicy;
+  policy: ReportResourcePolicy;
 }) {
   return (
     <span className={`resource-policy-badge ${policy}`}>

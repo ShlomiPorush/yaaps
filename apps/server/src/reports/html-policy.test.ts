@@ -36,14 +36,14 @@ describe("server HTML policy", () => {
   it("accepts only HTTPS presentation resources in connected reports", () => {
     const source = document(
       [
-        '<img src="https://cdn.example.com/chart.png" srcset="https://cdn.example.com/chart.png 1x, https://cdn.example.com/chart@2x.png 2x">',
+        '<img src="https://cdn.example.com/chart.png">',
         '<svg><image href="https://cdn.example.com/chart.png"></image></svg>',
         '<p style="background-image:url(https://cdn.example.com/background.webp)">Connected</p>',
       ].join(""),
       [
         "<title>Report</title>",
         '<link rel="stylesheet" href="https://cdn.example.com/report.css">',
-        '<style>@import "https://cdn.example.com/theme.css";@font-face{font-family:Report;src:url(https://cdn.example.com/report.woff2)}</style>',
+        "<style>@font-face{font-family:Report;src:url(https://cdn.example.com/report.woff2)}</style>",
       ].join(""),
     );
 
@@ -66,6 +66,18 @@ describe("server HTML policy", () => {
     [
       '<link rel="preload" href="https://cdn.example.com/report.css">',
       "ELEMENT_BLOCKED",
+    ],
+    [
+      '<img src="https://user:secret@cdn.example.com/chart.png">',
+      "RESOURCE_BLOCKED",
+    ],
+    [
+      '<img src="https://cdn.example.com/chart.png" srcset="https://cdn.example.com/chart@2x.png 2x">',
+      "RESOURCE_BLOCKED",
+    ],
+    [
+      '<style>@import "https://cdn.example.com/theme.css";</style>',
+      "CSS_NETWORK_RESOURCE",
     ],
   ])(
     "rejects a non-HTTPS or non-presentation connected resource",

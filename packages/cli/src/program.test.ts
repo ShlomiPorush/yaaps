@@ -178,6 +178,7 @@ describe("CLI commands with dash-leading draft IDs", () => {
     id: dashDraftId,
     latestVersionNumber: 1,
     publicUrl: `https://share.example.test/d/${dashDraftId}`,
+    resourcePolicy: "isolated",
     status: "disabled",
     title: "Dash report",
     updatedAt: "2026-08-26T00:00:00.000Z",
@@ -273,12 +274,15 @@ describe("CLI draft categories", () => {
     id: draftId,
     latestVersionNumber: 2,
     publicUrl: `https://share.example.test/d/${draftId}`,
+    resourcePolicy: "isolated",
     status: "enabled",
     title: "Quarterly report",
     updatedAt: "2026-08-26T00:00:00.000Z",
   };
 
-  async function buildProgram(payload: unknown) {
+  async function buildProgram(
+    payload: unknown | ((requestUrl: string) => unknown),
+  ) {
     const configDirectory = await temporaryDirectory();
     const workingDirectory = await temporaryDirectory();
     await writeFile(
@@ -297,7 +301,9 @@ describe("CLI draft categories", () => {
           method: String(init?.method ?? "GET"),
           url: String(input),
         });
-        return new Response(JSON.stringify(payload), {
+        const responsePayload =
+          typeof payload === "function" ? payload(String(input)) : payload;
+        return new Response(JSON.stringify(responsePayload), {
           headers: { "content-type": "application/json" },
           status: 200,
         });
@@ -324,6 +330,7 @@ describe("CLI draft categories", () => {
         byteLength: 128,
         createdAt: "2026-08-26T00:00:00.000Z",
         publicUrl: `${summary.publicUrl}/v/2`,
+        resourcePolicy: "isolated",
         sha256: "a".repeat(64),
         versionNumber: 2,
       },
@@ -369,6 +376,7 @@ describe("CLI draft categories", () => {
         byteLength: 128,
         createdAt: "2026-08-26T00:00:00.000Z",
         publicUrl: `${summary.publicUrl}/v/2`,
+        resourcePolicy: "connected",
         sha256: "a".repeat(64),
         versionNumber: 2,
       },
@@ -415,6 +423,38 @@ describe("CLI draft categories", () => {
       `${draftId}  enabled  v2  Quarterly report  Sales  ${summary.publicUrl}`,
       `${"D".repeat(32)}  enabled  v2  Quarterly report  Uncategorized  https://share.example.test/d/${draftId}`,
     ]);
+  });
+
+  it("shows the latest resource policy in human inspect output", async () => {
+    const connectedSummary = {
+      ...summary,
+      resourcePolicy: "connected" as const,
+    };
+    const { errors, output, program } = await buildProgram(
+      (requestUrl: string) =>
+        requestUrl.includes("/versions?")
+          ? {
+              items: [
+                {
+                  byteLength: 128,
+                  createdAt: "2026-08-26T00:00:00.000Z",
+                  publicUrl: `${summary.publicUrl}/v/2`,
+                  resourcePolicy: "connected",
+                  sha256: "a".repeat(64),
+                  versionNumber: 2,
+                },
+              ],
+              limit: 100,
+              offset: 0,
+              total: 1,
+            }
+          : connectedSummary,
+    );
+
+    await program.parseAsync(["node", "yaaps", "inspect", draftId]);
+
+    expect(errors).toEqual([]);
+    expect(output.join("\n")).toContain("Resource policy: connected.");
   });
 
   it("sets and clears a category, including for a dash-leading draft ID", async () => {

@@ -80,6 +80,15 @@ describe("public report routes", () => {
     expect(canonical.headers["content-security-policy"]).toBe(
       REPORT_CONTENT_SECURITY_POLICY,
     );
+    expect(canonical.headers["content-security-policy"]).toContain(
+      "allow-popups",
+    );
+    expect(canonical.headers["content-security-policy"]).not.toContain(
+      "allow-scripts",
+    );
+    expect(canonical.headers["content-security-policy"]).not.toContain(
+      "allow-same-origin",
+    );
     expect(canonical.headers["cache-control"]).toBe("private, no-store");
     expect(canonical.headers["referrer-policy"]).toBe("no-referrer");
     expect(canonical.headers["x-content-type-options"]).toBe("nosniff");
