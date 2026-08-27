@@ -45,6 +45,13 @@ describe("dashboard foundation", () => {
         name: localeDocuments.en.docs.authenticationHeading,
       }),
     ).toBeVisible();
+    const quickStartCode = Array.from(
+      document.querySelectorAll<HTMLElement>(".docs-section code"),
+    )
+      .map((element) => element.textContent)
+      .join("\n");
+    expect(quickStartCode).toContain("resourcePolicy=connected");
+    expect(quickStartCode).toContain('"resourcePolicy": "connected"');
     expect(
       screen.getByRole("link", {
         name: new RegExp(localeDocuments.en.docs.openApiAction, "u"),
@@ -90,6 +97,9 @@ describe("dashboard foundation", () => {
     );
     expect(
       screen.getByRole("heading", { name: localeDocuments.he.docs.heading }),
+    ).toBeVisible();
+    expect(
+      screen.getByText(localeDocuments.he.docs.quickStartIntro),
     ).toBeVisible();
     expect(
       screen.getByRole("link", {

@@ -23,6 +23,7 @@ export const draftCategorySchema = z
   .refine((value) => !/\p{Cc}/u.test(value));
 export const draftIdSchema = z.string().regex(/^[A-Za-z0-9_-]{32}$/);
 export const draftStatusSchema = z.enum(["enabled", "disabled"]);
+export const reportResourcePolicySchema = z.enum(["isolated", "connected"]);
 export const draftTitleSchema = z.string().trim().min(1).max(200);
 export const ttlSecondsSchema = z.coerce.number().int().positive().safe();
 export const paginationQuerySchema = z.object({
@@ -34,11 +35,13 @@ export const draftListQuerySchema = paginationQuerySchema.extend({
 });
 export const createDraftQuerySchema = z.object({
   category: draftCategorySchema.optional(),
+  resourcePolicy: reportResourcePolicySchema.optional(),
   title: draftTitleSchema.optional(),
   ttlSeconds: ttlSecondsSchema.optional(),
 });
 export const addDraftVersionQuerySchema = z.object({
   category: draftCategorySchema.optional(),
+  resourcePolicy: reportResourcePolicySchema.optional(),
   title: draftTitleSchema.optional(),
   ttlSeconds: ttlSecondsSchema.optional(),
 });
@@ -64,6 +67,7 @@ export const draftSummarySchema = z.object({
   id: draftIdSchema,
   latestVersionNumber: z.number().int().positive(),
   publicUrl: z.url(),
+  resourcePolicy: reportResourcePolicySchema,
   status: draftStatusSchema,
   title: draftTitleSchema.nullable(),
   updatedAt: z.iso.datetime(),
@@ -72,6 +76,7 @@ export const draftVersionSummarySchema = z.object({
   byteLength: z.number().int().positive(),
   createdAt: z.iso.datetime(),
   publicUrl: z.url(),
+  resourcePolicy: reportResourcePolicySchema,
   sha256: z.string().regex(/^[a-f0-9]{64}$/),
   versionNumber: z.number().int().positive(),
 });
@@ -322,6 +327,7 @@ export type CategorySummary = z.infer<typeof categorySummarySchema>;
 export type DraftListQuery = z.infer<typeof draftListQuerySchema>;
 export type DraftListResponse = z.infer<typeof draftListResponseSchema>;
 export type DraftStatus = z.infer<typeof draftStatusSchema>;
+export type ReportResourcePolicy = z.infer<typeof reportResourcePolicySchema>;
 export type DraftSummary = z.infer<typeof draftSummarySchema>;
 export type DraftVersionListResponse = z.infer<
   typeof draftVersionListResponseSchema

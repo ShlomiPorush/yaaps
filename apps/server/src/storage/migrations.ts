@@ -355,6 +355,26 @@ const draftCategories: Migration = {
   },
 };
 
+const reportResourcePolicy: Migration = {
+  async up(database) {
+    await database.schema
+      .alterTable("versions")
+      .addColumn("resource_policy", "text", (column) =>
+        column
+          .notNull()
+          .defaultTo("isolated")
+          .check(sql`resource_policy in ('isolated', 'connected')`),
+      )
+      .execute();
+  },
+  async down(database) {
+    await database.schema
+      .alterTable("versions")
+      .dropColumn("resource_policy")
+      .execute();
+  },
+};
+
 class YaapsMigrationProvider implements MigrationProvider {
   async getMigrations(): Promise<Record<string, Migration>> {
     return {
@@ -362,6 +382,7 @@ class YaapsMigrationProvider implements MigrationProvider {
       "002_authentication_state": authenticationState,
       "003_device_connections": deviceConnections,
       "004_draft_categories": draftCategories,
+      "005_report_resource_policy": reportResourcePolicy,
     };
   }
 }

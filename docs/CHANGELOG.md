@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Added
+
+- Publishers can choose an isolated or connected resource policy for each immutable report version. Isolated remains the default, while connected reports may load HTTPS images, fonts, and stylesheets; HTTPS hyperlinks work in both modes, and active content and programmatic network access remain blocked.
+
 ## [1.3.1] - 2026-08-27
 
 ### Changed

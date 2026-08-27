@@ -3,6 +3,7 @@ import {
   draftSummarySchema,
   draftVersionListResponseSchema,
   publishDraftResponseSchema,
+  type ReportResourcePolicy,
   type DraftListResponse,
   type DraftStatus,
   type DraftSummary,
@@ -25,6 +26,7 @@ export interface PublishOptions {
   category?: string;
   draftId?: string;
   html: Uint8Array;
+  resourcePolicy: ReportResourcePolicy;
   title?: string;
   ttlSeconds?: number;
 }
@@ -62,6 +64,7 @@ function publishRoute(options: PublishOptions): string {
     ? `/api/drafts/${options.draftId}/versions`
     : "/api/drafts";
   const query = new URLSearchParams();
+  query.set("resourcePolicy", options.resourcePolicy);
   if (options.category !== undefined) query.set("category", options.category);
   if (options.title !== undefined) query.set("title", options.title);
   if (options.ttlSeconds !== undefined) {

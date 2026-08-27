@@ -18,6 +18,7 @@ import {
   healthResponseSchema,
   publicErrorSchema,
   publicServiceMetadataSchema,
+  reportResourcePolicySchema,
   pollDeviceConnectionResponseSchema,
   updateDraftRequestSchema,
 } from "./index.js";
@@ -205,6 +206,22 @@ describe("draft category contracts", () => {
       categoryListResponseSchema.parse({
         items: [{ category: "Ops", draftCount: 0 }],
       }),
+    ).toThrow();
+  });
+});
+
+describe("report resource policy contracts", () => {
+  it("accepts the two immutable policies on publish queries", () => {
+    expect(reportResourcePolicySchema.parse("isolated")).toBe("isolated");
+    expect(reportResourcePolicySchema.parse("connected")).toBe("connected");
+    expect(
+      createDraftQuerySchema.parse({ resourcePolicy: "connected" }),
+    ).toEqual({ resourcePolicy: "connected" });
+    expect(
+      addDraftVersionQuerySchema.parse({ resourcePolicy: "isolated" }),
+    ).toEqual({ resourcePolicy: "isolated" });
+    expect(() =>
+      createDraftQuerySchema.parse({ resourcePolicy: "permissive" }),
     ).toThrow();
   });
 });

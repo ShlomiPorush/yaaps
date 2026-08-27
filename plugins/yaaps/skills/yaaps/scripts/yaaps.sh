@@ -365,23 +365,26 @@ case "$command_name" in
     json_health "$(http_request GET "$status_url/healthz" '' '' '')" "$(http_request GET "$status_url/readyz" '' '' '')"
     ;;
   publish)
-    [ "$#" -ge 1 ] || fail 'Usage: publish <html-file> [--category <name>] [--draft-id <id>] [--title <title>] [--ttl <seconds>]'
+    [ "$#" -ge 1 ] || fail 'Usage: publish <html-file> [--mode isolated|connected] [--category <name>] [--draft-id <id>] [--title <title>] [--ttl <seconds>]'
     publish_file=$1; shift
     [ -f "$publish_file" ] || fail 'The HTML file does not exist.'
-    publish_category= publish_draft= publish_title= publish_ttl=
+    publish_category= publish_draft= publish_mode=isolated publish_title= publish_ttl=
     while [ "$#" -gt 0 ]; do
       case "$1" in
         --category) [ "$#" -ge 2 ] || fail '--category requires a value.'; publish_category=$2; shift 2 ;;
         --draft-id) [ "$#" -ge 2 ] || fail '--draft-id requires a value.'; publish_draft=$(assert_draft_id "$2"); shift 2 ;;
+        --mode) [ "$#" -ge 2 ] || fail '--mode requires a value.'; publish_mode=$2; shift 2 ;;
         --title) [ "$#" -ge 2 ] || fail '--title requires a value.'; publish_title=$2; shift 2 ;;
         --ttl) [ "$#" -ge 2 ] || fail '--ttl requires a value.'; publish_ttl=$2; shift 2 ;;
         *) fail "Unknown publish argument: $1" ;;
       esac
     done
+    case "$publish_mode" in isolated|connected) ;; *) fail '--mode must be either isolated or connected.' ;; esac
     load_credentials
     publish_route=/api/drafts
     [ -z "$publish_draft" ] || publish_route="/api/drafts/$publish_draft/versions"
-    publish_separator='?'
+    publish_route="$publish_route?resourcePolicy=$publish_mode"
+    publish_separator='&'
     if [ -n "$publish_category" ]; then publish_route="$publish_route${publish_separator}category=$(url_encode "$publish_category")"; publish_separator='&'; fi
     if [ -n "$publish_title" ]; then publish_route="$publish_route${publish_separator}title=$(url_encode "$publish_title")"; publish_separator='&'; fi
     if [ -n "$publish_ttl" ]; then

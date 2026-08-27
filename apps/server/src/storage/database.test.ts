@@ -57,9 +57,85 @@ describe("database migrations", () => {
         { name: "002_authentication_state" },
         { name: "003_device_connections" },
         { name: "004_draft_categories" },
+        { name: "005_report_resource_policy" },
       ]);
     } finally {
       await reopened.connection.destroy();
+    }
+  });
+
+  it("migrates existing versions to the isolated resource policy", async () => {
+    const directory = await temporaryDirectory();
+    const databasePath = path.join(directory, "yaaps.sqlite");
+    const current = await openDatabase(directory);
+    const createdAt = new Date().toISOString();
+    await current.connection
+      .insertInto("users")
+      .values({
+        created_at: createdAt,
+        disabled_at: null,
+        display_name: "Existing owner",
+        id: "existing-owner",
+        role: "user",
+        status: "active",
+        webauthn_user_id: null,
+      })
+      .execute();
+    await current.connection
+      .insertInto("drafts")
+      .values({
+        category: null,
+        created_at: createdAt,
+        expires_at: new Date(Date.now() + 60_000).toISOString(),
+        id: "existing-draft",
+        latest_version_number: 1,
+        owner_id: "existing-owner",
+        status: "enabled",
+        title: null,
+        updated_at: createdAt,
+      })
+      .execute();
+    await current.connection
+      .insertInto("versions")
+      .values({
+        blob_key: "existing-blob",
+        byte_length: 10,
+        created_at: createdAt,
+        draft_id: "existing-draft",
+        id: "existing-version",
+        resource_policy: "isolated",
+        sha256: "a".repeat(64),
+        uploaded_by_api_key_id: null,
+        version_number: 1,
+      })
+      .execute();
+    await current.connection.destroy();
+
+    const legacy = new BetterSqlite3(databasePath);
+    legacy.exec(`
+      alter table versions drop column resource_policy;
+      delete from kysely_migration where name = '005_report_resource_policy';
+    `);
+    legacy.close();
+
+    const migrated = await openDatabase(directory);
+    try {
+      await expect(
+        migrated.connection
+          .selectFrom("versions")
+          .select("resource_policy")
+          .where("id", "=", "existing-version")
+          .executeTakeFirstOrThrow(),
+      ).resolves.toEqual({ resource_policy: "isolated" });
+      await expect(
+        migrated.connection
+          .updateTable("versions")
+          .set({ resource_policy: "invalid" as "isolated" })
+          .where("id", "=", "existing-version")
+          .execute(),
+      ).rejects.toThrow();
+    } finally {
+      await migrated.connection.destroy();
     }
   });
 

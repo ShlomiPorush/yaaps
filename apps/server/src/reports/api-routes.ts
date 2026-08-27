@@ -18,11 +18,11 @@ import {
   type AuthenticatedApiKey,
   type AuthenticationRepository,
 } from "../auth/repository.js";
-import type { DraftsTable } from "../storage/schema.js";
 import {
   DraftNotFoundError,
   type DraftStorage,
   type StoredDraftVersion,
+  type StoredDraft,
   type StoredVersionMetadata,
 } from "../storage/draft-storage.js";
 
@@ -69,7 +69,7 @@ function canonicalUrl(origin: string, draftId: string): string {
   return `${origin}/d/${draftId}`;
 }
 
-export function draftSummary(origin: string, draft: DraftsTable): DraftSummary {
+export function draftSummary(origin: string, draft: StoredDraft): DraftSummary {
   return {
     category: draft.category,
     createdAt: draft.created_at,
@@ -77,6 +77,7 @@ export function draftSummary(origin: string, draft: DraftsTable): DraftSummary {
     id: draft.id,
     latestVersionNumber: draft.latest_version_number,
     publicUrl: canonicalUrl(origin, draft.id),
+    resourcePolicy: draft.resourcePolicy,
     status: draft.status,
     title: draft.title,
     updatedAt: draft.updated_at,
@@ -92,6 +93,7 @@ export function versionSummary(
     byteLength: version.byteLength,
     createdAt: version.createdAt,
     publicUrl: `${canonicalUrl(origin, draftId)}/v/${version.versionNumber}`,
+    resourcePolicy: version.resourcePolicy,
     sha256: version.sha256,
     versionNumber: version.versionNumber,
   };
@@ -167,6 +169,7 @@ export async function registerReportApiRoutes(
             ),
             html: htmlBody(request),
             ownerId: actor.userId,
+            resourcePolicy: query.resourcePolicy,
             title: query.title,
             uploadedByApiKeyId: actor.apiKeyId,
           });
@@ -202,6 +205,7 @@ export async function registerReportApiRoutes(
             ),
             html: htmlBody(request),
             ownerId: actor.userId,
+            resourcePolicy: query.resourcePolicy,
             title: query.title,
             uploadedByApiKeyId: actor.apiKeyId,
           });

@@ -46,7 +46,7 @@ See the [CLI reference](packages/cli/README.md) for all commands.
 - Provider-neutral Agent Skill with Windows, macOS, and manual installation paths.
 - Passkey authentication, invitations, recovery codes, and revocable agent access, with optional open self-registration (`YAAPS_OPEN_REGISTRATION=true`).
 - Owner-scoped reports with immutable versions, expiry controls, and public capability URLs.
-- Strict report isolation that blocks scripts, forms, frames, plugins, and network requests.
+- Publisher-selected report isolation: keep a version fully self-contained, or allow HTTPS presentation assets while scripts, forms, frames, plugins, and programmatic network requests stay blocked.
 - English and Hebrew interfaces with LTR, RTL, light, dark, desktop, and mobile support.
 - HTTP API with OpenAPI 3.1, Swagger UI, and ReDoc documentation.
 - SQLite metadata, immutable HTML storage, retention cleanup, and verified backup and restore operations.

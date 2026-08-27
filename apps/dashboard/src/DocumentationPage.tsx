@@ -100,7 +100,7 @@ export function DocumentationPage({ copy }: DocumentationPageProps) {
             <CodeBlock label="cURL">
               {`curl --fail-with-body \\
   --request POST \\
-  --url "$YAAPS_API_URL/api/drafts?category=Weekly&title=Weekly%20report&ttlSeconds=86400" \\
+  --url "$YAAPS_API_URL/api/drafts?category=Weekly&title=Weekly%20report&ttlSeconds=86400&resourcePolicy=connected" \\
   --header "Authorization: Bearer $YAAPS_API_KEY" \\
   --header "Content-Type: text/html" \\
   --data-binary @report.html`}
@@ -111,12 +111,14 @@ export function DocumentationPage({ copy }: DocumentationPageProps) {
   "draft": {
     "id": "8K2vM4...Qp",
     "publicUrl": "https://share.example.com/d/8K2vM4...Qp",
+    "resourcePolicy": "connected",
     "status": "enabled",
     "latestVersionNumber": 1
   },
   "version": {
     "versionNumber": 1,
-    "publicUrl": "https://share.example.com/d/8K2vM4...Qp/v/1"
+    "publicUrl": "https://share.example.com/d/8K2vM4...Qp/v/1",
+    "resourcePolicy": "connected"
   }
 }`}
             </CodeBlock>

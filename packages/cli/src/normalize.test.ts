@@ -58,21 +58,126 @@ describe("CLI HTML normalization", () => {
   });
 
   it.each([
-    ["external image", '<img src="https://example.com/pixel.png">'],
+    ["external image", '<img src="https://example.com/pixel.png">', undefined],
     [
       "network CSS",
       '<p style="background:url(https://example.com/x.png)">x</p>',
+      undefined,
     ],
+    [
+      "external stylesheet",
+      "",
+      '<title>Report</title><link rel="stylesheet" href="https://example.com/report.css">',
+    ],
+  ])(
+    "rejects %s in isolated mode with an actionable error",
+    async (_name, body, head) => {
+      const directory = await temporaryDirectory();
+      const htmlPath = path.join(directory, "report.html");
+      await writeFile(htmlPath, document(body, head), "utf8");
+
+      await expect(normalizeHtmlFile(htmlPath)).rejects.toThrow(
+        "--mode connected",
+      );
+    },
+  );
+
+  it.each([
     ["script", "<script>alert(1)</script>"],
-    ["external link", '<a href="https://example.com">link</a>'],
-  ])("rejects %s dependencies or executable content", async (_name, body) => {
+    ["form", "<form><button>Send</button></form>"],
+    ["iframe", '<iframe src="https://example.com"></iframe>'],
+    ["HTTP image", '<img src="http://example.com/pixel.png">'],
+    [
+      "HTTP CSS resource",
+      '<p style="background:url(http://example.com/x.png)">x</p>',
+    ],
+  ])("rejects %s even in connected mode", async (_name, body) => {
     const directory = await temporaryDirectory();
     const htmlPath = path.join(directory, "report.html");
     await writeFile(htmlPath, document(body), "utf8");
 
-    await expect(normalizeHtmlFile(htmlPath)).rejects.toBeInstanceOf(
+    await expect(
+      normalizeHtmlFile(htmlPath, "connected"),
+    ).rejects.toBeInstanceOf(HtmlNormalizationError);
+  });
+
+  it.each(["isolated", "connected"] as const)(
+    "preserves HTTPS hyperlinks in %s mode",
+    async (resourcePolicy) => {
+      const directory = await temporaryDirectory();
+      const htmlPath = path.join(directory, "report.html");
+      await writeFile(
+        htmlPath,
+        document('<a href="https://example.com/source?q=1#result">Source</a>'),
+        "utf8",
+      );
+
+      const normalized = (
+        await normalizeHtmlFile(htmlPath, resourcePolicy)
+      ).toString("utf8");
+
+      expect(normalized).toContain(
+        'href="https://example.com/source?q=1#result"',
+      );
+    },
+  );
+
+  it("preserves HTTPS images, stylesheets, and CSS resources in connected mode", async () => {
+    const directory = await temporaryDirectory();
+    const htmlPath = path.join(directory, "report.html");
+    await writeFile(
+      htmlPath,
+      document(
+        '<img src="https://cdn.example.com/chart.png"><section style="background:url(https://cdn.example.com/background.webp)">Report</section>',
+        '<title>Report</title><link rel="stylesheet" href="https://cdn.example.com/report.css"><style>@font-face{font-family:Report;src:url(https://cdn.example.com/report.woff2)}.hero{background-image:url(https://cdn.example.com/hero.png)}</style>',
+      ),
+      "utf8",
+    );
+
+    const normalized = (
+      await normalizeHtmlFile(htmlPath, "connected")
+    ).toString("utf8");
+
+    expect(normalized).toContain("https://cdn.example.com/chart.png");
+    expect(normalized).toContain("https://cdn.example.com/background.webp");
+    expect(normalized).toContain("https://cdn.example.com/report.css");
+    expect(normalized).toContain("https://cdn.example.com/report.woff2");
+    expect(normalized).toContain("https://cdn.example.com/hero.png");
+  });
+
+  it.each([
+    '<link rel="preload" href="https://example.com/font.woff2">',
+    '<link rel="stylesheet" href="http://example.com/report.css">',
+    '<link rel="stylesheet alternate" href="https://example.com/report.css">',
+  ])("rejects unsafe link resources in connected mode", async (headLink) => {
+    const directory = await temporaryDirectory();
+    const htmlPath = path.join(directory, "report.html");
+    await writeFile(
+      htmlPath,
+      document("<p>Report</p>", `<title>Report</title>${headLink}`),
+      "utf8",
+    );
+
+    await expect(normalizeHtmlFile(htmlPath, "connected")).rejects.toThrow(
       HtmlNormalizationError,
     );
+  });
+
+  it("continues to embed local bitmap resources in connected mode", async () => {
+    const directory = await temporaryDirectory();
+    const htmlPath = path.join(directory, "report.html");
+    await writeFile(htmlPath, document('<img src="chart.png">'), "utf8");
+    await writeFile(
+      path.join(directory, "chart.png"),
+      Buffer.from("89504e470d0a1a0a00000000", "hex"),
+    );
+
+    const normalized = (
+      await normalizeHtmlFile(htmlPath, "connected")
+    ).toString("utf8");
+
+    expect(normalized).toContain("data:image/png;base64,");
+    expect(normalized).not.toContain("chart.png");
   });
 
   it("reports the exact missing or unsupported local asset reference", async () => {

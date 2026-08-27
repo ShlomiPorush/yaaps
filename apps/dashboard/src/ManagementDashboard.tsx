@@ -4,6 +4,7 @@ import type {
   DraftSummary,
   DraftVersionSummary,
   PublicServiceMetadata,
+  ReportResourcePolicy,
 } from "@yaaps/contracts";
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 
@@ -23,6 +24,28 @@ import {
 const existingCategoryPrefix = "existing:";
 const newCategoryChoice = "new";
 const noCategoryChoice = "";
+
+function resourcePolicyOf(
+  summary: DraftSummary | DraftVersionSummary,
+): ReportResourcePolicy {
+  return summary.resourcePolicy;
+}
+
+function ResourcePolicyBadge({
+  copy,
+  policy,
+}: {
+  copy: LocaleDocument;
+  policy: ReportResourcePolicy;
+}) {
+  return (
+    <span className={`resource-policy-badge ${policy}`}>
+      {policy === "isolated"
+        ? copy.management.resourcePolicyIsolated
+        : copy.management.resourcePolicyConnected}
+    </span>
+  );
+}
 
 function categoryChoiceOf(category: string): string {
   return `${existingCategoryPrefix}${category}`;
@@ -455,10 +478,16 @@ export function ManagementDashboard({
                       {draft.title ?? copy.management.untitled}
                     </a>
                   </h3>
-                  <span className={`state-badge ${draft.status}`}>
-                    {draft.status === "enabled"
-                      ? copy.management.enabled
-                      : copy.management.reportDisabled}
+                  <span className="draft-title-badges">
+                    <span className={`state-badge ${draft.status}`}>
+                      {draft.status === "enabled"
+                        ? copy.management.enabled
+                        : copy.management.reportDisabled}
+                    </span>
+                    <ResourcePolicyBadge
+                      copy={copy}
+                      policy={resourcePolicyOf(draft)}
+                    />
                   </span>
                 </div>
                 <p className="draft-meta">
@@ -664,8 +693,14 @@ export function ManagementDashboard({
                     target="_blank"
                     rel="noreferrer"
                   >
-                    <span>
-                      {copy.management.version} {version.versionNumber}
+                    <span className="version-identity">
+                      <span>
+                        {copy.management.version} {version.versionNumber}
+                      </span>
+                      <ResourcePolicyBadge
+                        copy={copy}
+                        policy={resourcePolicyOf(version)}
+                      />
                     </span>
                     <small>
                       {formatDate(version.createdAt)} ·{" "}

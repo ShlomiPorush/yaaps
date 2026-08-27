@@ -67,6 +67,19 @@ const titleParameter = {
   schema: { maxLength: 200, minLength: 1, type: "string" },
 };
 
+const resourcePolicyParameter = {
+  description:
+    "Resource loading policy for this immutable version. Isolated rejects automatic external loads; connected permits HTTPS images, fonts, and stylesheets while scripts and programmatic network access remain blocked. Defaults to isolated.",
+  in: "query",
+  name: "resourcePolicy",
+  required: false,
+  schema: {
+    default: "isolated",
+    enum: ["isolated", "connected"],
+    type: "string",
+  },
+};
+
 const ttlParameter = (retention: RetentionPolicy) => ({
   description: `Lifetime in seconds. Defaults to ${retention.defaultTtlSeconds}.`,
   in: "query",
@@ -107,14 +120,14 @@ const htmlRequestBody = {
   content: {
     "text/html": {
       schema: {
-        description: "A complete, self-contained UTF-8 HTML document.",
+        description: "A complete UTF-8 HTML document.",
         maxLength: DOCUMENT_LIMITS.maximumHtmlBytes,
         type: "string",
       },
     },
   },
   description:
-    "The report document. Scripts, forms, frames, external resources, and unsafe CSS are rejected.",
+    "The report document. Scripts, forms, frames, programmatic network access, non-HTTPS resources, and unsafe CSS are rejected. Automatic external presentation resources additionally require resourcePolicy=connected.",
   required: true,
 };
 
@@ -143,7 +156,7 @@ export function createOpenApiDocument(options: {
     openapi: "3.1.0",
     info: {
       description:
-        "Publish temporary, self-contained HTML reports and manage their public lifecycle. Browser authentication and administration routes are intentionally outside this agent-facing API.",
+        "Publish temporary HTML reports with an immutable per-version resource policy and manage their public lifecycle. Browser authentication and administration routes are intentionally outside this agent-facing API.",
       license: { name: "MIT" },
       title: "YAAPS API",
       version: options.version,
@@ -316,7 +329,12 @@ export function createOpenApiDocument(options: {
         },
         post: {
           operationId: "createDraft",
-          parameters: [categoryParameter, titleParameter, ttl],
+          parameters: [
+            categoryParameter,
+            titleParameter,
+            ttl,
+            resourcePolicyParameter,
+          ],
           requestBody: htmlRequestBody,
           responses: publishResponses,
           security: bearerSecurity,
@@ -408,6 +426,7 @@ export function createOpenApiDocument(options: {
             categoryParameter,
             titleParameter,
             ttl,
+            resourcePolicyParameter,
           ],
           requestBody: htmlRequestBody,
           responses: publishResponses,
