@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import type { FastifyInstance } from "fastify";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { buildApplication } from "../app.js";
 import {
@@ -202,6 +202,9 @@ describe("public report routes", () => {
         message: "This report is unavailable.",
       },
     });
+    await expect(
+      application.yaapsData!.drafts.findForOwner("report-owner", draft.draftId),
+    ).resolves.toMatchObject({ view_count: 0 });
   });
 
   it("returns an intentional expiry response without report metadata", async () => {
@@ -252,5 +255,107 @@ describe("public report routes", () => {
     expect(response.body).not.toContain(privateBody);
     expect(response.body).not.toContain(draft.blobKey);
     expect(response.body).not.toContain(directory);
+  });
+
+  it("counts only successful GETs against the exact resolved version", async () => {
+    const draft = await application.yaapsData!.drafts.createDraft({
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      html: html("<p>Version one</p>"),
+      ownerId: "report-owner",
+    });
+    await application.yaapsData!.drafts.addVersion({
+      draftId: draft.draftId,
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      html: html("<p>Version two</p>"),
+      ownerId: "report-owner",
+    });
+
+    const responses = await Promise.all([
+      application.inject({ method: "HEAD", url: `/d/${draft.draftId}` }),
+      application.inject({ method: "GET", url: `/d/${draft.draftId}` }),
+      application.inject({ method: "GET", url: `/d/${draft.draftId}/v/1` }),
+      application.inject({ method: "GET", url: `/d/${draft.draftId}/v/99` }),
+      application.inject({ method: "GET", url: `/d/${"A".repeat(32)}` }),
+    ]);
+    expect(responses.map((response) => response.statusCode)).toEqual([
+      200, 200, 200, 404, 404,
+    ]);
+
+    await expect(
+      application.yaapsData!.drafts.findForOwner("report-owner", draft.draftId),
+    ).resolves.toMatchObject({ view_count: 2 });
+    await expect(
+      application.yaapsData!.drafts.listVersionsForOwner(
+        "report-owner",
+        draft.draftId,
+        10,
+        0,
+      ),
+    ).resolves.toMatchObject({
+      items: [
+        { versionNumber: 2, viewCount: 1 },
+        { versionNumber: 1, viewCount: 1 },
+      ],
+    });
+  });
+
+  it("does not count expired reports or failed blob reads", async () => {
+    const expired = await application.yaapsData!.drafts.createDraft({
+      expiresAt: new Date(Date.now() - 1_000).toISOString(),
+      html: html("<p>Expired</p>"),
+      ownerId: "report-owner",
+    });
+    const missingBlob = await application.yaapsData!.drafts.createDraft({
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      html: html("<p>Missing blob</p>"),
+      ownerId: "report-owner",
+    });
+    await application.yaapsData!.blobs.remove(missingBlob.blobKey);
+
+    const expiredResponse = await application.inject({
+      method: "GET",
+      url: `/d/${expired.draftId}`,
+    });
+    const blobResponse = await application.inject({
+      method: "GET",
+      url: `/d/${missingBlob.draftId}`,
+    });
+    expect(expiredResponse.statusCode).toBe(410);
+    expect(blobResponse.statusCode).toBe(500);
+    const rows = await application
+      .yaapsData!.database.connection.selectFrom("drafts")
+      .select(["id", "view_count"])
+      .where("id", "in", [expired.draftId, missingBlob.draftId])
+      .execute();
+    expect(rows.every((row) => row.view_count === 0)).toBe(true);
+  });
+
+  it("serves the report and logs structured context when counting fails", async () => {
+    const draft = await application.yaapsData!.drafts.createDraft({
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      html: html("<p>Count failure must not hide this</p>"),
+      ownerId: "report-owner",
+    });
+    const count = vi
+      .spyOn(application.yaapsData!.drafts, "recordPublicView")
+      .mockRejectedValueOnce(new Error("simulated count failure"));
+    const log = vi.spyOn(application.log, "error");
+
+    const response = await application.inject({
+      method: "GET",
+      url: `/d/${draft.draftId}`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain("Count failure must not hide this");
+    expect(count).toHaveBeenCalledWith(draft.draftId, 1);
+    expect(log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        draftId: draft.draftId,
+        event: "public_report_view_count_failed",
+        versionNumber: 1,
+      }),
+      "Failed to record a public report view.",
+    );
   });
 });

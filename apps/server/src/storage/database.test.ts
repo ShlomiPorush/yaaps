@@ -58,6 +58,7 @@ describe("database migrations", () => {
         { name: "003_device_connections" },
         { name: "004_draft_categories" },
         { name: "005_report_resource_policy" },
+        { name: "006_report_view_counts" },
       ]);
     } finally {
       await reopened.connection.destroy();
@@ -113,8 +114,12 @@ describe("database migrations", () => {
 
     const legacy = new BetterSqlite3(databasePath);
     legacy.exec(`
+      drop trigger report_version_view_count_sync;
       alter table versions drop column resource_policy;
-      delete from kysely_migration where name = '005_report_resource_policy';
+      alter table versions drop column view_count;
+      alter table drafts drop column view_count;
+      delete from kysely_migration
+      where name in ('005_report_resource_policy', '006_report_view_counts');
     `);
     legacy.close();
 
@@ -132,6 +137,97 @@ describe("database migrations", () => {
           .updateTable("versions")
           .set({ resource_policy: "invalid" as "isolated" })
           .where("id", "=", "existing-version")
+          .execute(),
+      ).rejects.toThrow();
+    } finally {
+      await migrated.connection.destroy();
+    }
+  });
+
+  it("backfills report view counters and rejects negative values", async () => {
+    const directory = await temporaryDirectory();
+    const databasePath = path.join(directory, "yaaps.sqlite");
+    const current = await openDatabase(directory);
+    const createdAt = new Date().toISOString();
+    await current.connection
+      .insertInto("users")
+      .values({
+        created_at: createdAt,
+        disabled_at: null,
+        display_name: "Existing owner",
+        id: "view-count-owner",
+        role: "user",
+        status: "active",
+        webauthn_user_id: null,
+      })
+      .execute();
+    await current.connection
+      .insertInto("drafts")
+      .values({
+        category: null,
+        created_at: createdAt,
+        expires_at: new Date(Date.now() + 60_000).toISOString(),
+        id: "view-count-draft",
+        latest_version_number: 1,
+        owner_id: "view-count-owner",
+        status: "enabled",
+        title: null,
+        updated_at: createdAt,
+      })
+      .execute();
+    await current.connection
+      .insertInto("versions")
+      .values({
+        blob_key: "view-count-blob",
+        byte_length: 10,
+        created_at: createdAt,
+        draft_id: "view-count-draft",
+        id: "view-count-version",
+        resource_policy: "isolated",
+        sha256: "a".repeat(64),
+        uploaded_by_api_key_id: null,
+        version_number: 1,
+      })
+      .execute();
+    await current.connection.destroy();
+
+    const legacy = new BetterSqlite3(databasePath);
+    legacy.exec(`
+      drop trigger report_version_view_count_sync;
+      alter table versions drop column view_count;
+      alter table drafts drop column view_count;
+      delete from kysely_migration where name = '006_report_view_counts';
+    `);
+    legacy.close();
+
+    const migrated = await openDatabase(directory);
+    try {
+      await expect(
+        migrated.connection
+          .selectFrom("drafts")
+          .select("view_count")
+          .where("id", "=", "view-count-draft")
+          .executeTakeFirstOrThrow(),
+      ).resolves.toEqual({ view_count: 0 });
+      await expect(
+        migrated.connection
+          .selectFrom("versions")
+          .select("view_count")
+          .where("id", "=", "view-count-version")
+          .executeTakeFirstOrThrow(),
+      ).resolves.toEqual({ view_count: 0 });
+      await expect(
+        migrated.connection
+          .updateTable("drafts")
+          .set({ view_count: -1 })
+          .where("id", "=", "view-count-draft")
+          .execute(),
+      ).rejects.toThrow();
+      await expect(
+        migrated.connection
+          .updateTable("versions")
+          .set({ view_count: -1 })
+          .where("id", "=", "view-count-version")
           .execute(),
       ).rejects.toThrow();
     } finally {

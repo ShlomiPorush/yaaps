@@ -71,6 +71,7 @@ export const draftSummarySchema = z.object({
   status: draftStatusSchema,
   title: draftTitleSchema.nullable(),
   updatedAt: z.iso.datetime(),
+  viewCount: z.number().int().nonnegative(),
 });
 export const draftVersionSummarySchema = z.object({
   byteLength: z.number().int().positive(),
@@ -79,6 +80,7 @@ export const draftVersionSummarySchema = z.object({
   resourcePolicy: reportResourcePolicySchema,
   sha256: z.string().regex(/^[a-f0-9]{64}$/),
   versionNumber: z.number().int().positive(),
+  viewCount: z.number().int().nonnegative(),
 });
 export const publishDraftResponseSchema = z.object({
   draft: draftSummarySchema,

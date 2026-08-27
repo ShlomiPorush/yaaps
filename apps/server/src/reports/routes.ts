@@ -1,5 +1,5 @@
 import { draftIdSchema, type ReportResourcePolicy } from "@yaaps/contracts";
-import type { FastifyInstance, FastifyReply } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 
 import type {
@@ -147,6 +147,32 @@ function sendResolution(
     .send(injectSharePreview(resolution.html, resolution.title, publicOrigin));
 }
 
+async function serveResolution(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  drafts: DraftStorage,
+  draftId: string,
+  resolution: PublicReportResolution,
+  publicOrigin: string,
+) {
+  if (resolution.status === "available" && request.method === "GET") {
+    try {
+      await drafts.recordPublicView(draftId, resolution.versionNumber);
+    } catch (error) {
+      request.log.error(
+        {
+          draftId,
+          err: error,
+          event: "public_report_view_count_failed",
+          versionNumber: resolution.versionNumber,
+        },
+        "Failed to record a public report view.",
+      );
+    }
+  }
+  return sendResolution(reply, resolution, publicOrigin);
+}
+
 export async function registerPublicReportRoutes(
   application: FastifyInstance,
   options: { drafts: DraftStorage; publicOrigin: string },
@@ -154,8 +180,11 @@ export async function registerPublicReportRoutes(
   const publicOrigin = options.publicOrigin.replace(/\/$/u, "");
   application.get("/d/:draftId", async (request, reply) => {
     const { draftId } = draftParametersSchema.parse(request.params);
-    return sendResolution(
+    return serveResolution(
+      request,
       reply,
+      options.drafts,
+      draftId,
       await options.drafts.resolvePublic(draftId),
       publicOrigin,
     );
@@ -163,8 +192,11 @@ export async function registerPublicReportRoutes(
 
   application.get("/d/:draftId/v/:version", async (request, reply) => {
     const { draftId, version } = versionParametersSchema.parse(request.params);
-    return sendResolution(
+    return serveResolution(
+      request,
       reply,
+      options.drafts,
+      draftId,
       await options.drafts.resolvePublic(draftId, version),
       publicOrigin,
     );

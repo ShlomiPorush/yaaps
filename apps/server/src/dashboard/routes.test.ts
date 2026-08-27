@@ -6,6 +6,7 @@ import {
   categoryListResponseSchema,
   draftListResponseSchema,
   draftSummarySchema,
+  draftVersionListResponseSchema,
   publicErrorSchema,
 } from "@yaaps/contracts";
 import type { LightMyRequestResponse } from "fastify";
@@ -222,6 +223,14 @@ describe("dashboard report management boundary", () => {
       title: "Owner report",
       uploadedByApiKeyId: null,
     });
+    expect(
+      (
+        await application.inject({
+          method: "GET",
+          url: `/d/${stored.draftId}`,
+        })
+      ).statusCode,
+    ).toBe(200);
 
     const ownList = await application.inject({
       headers: browserHeaders(ownerCookies),
@@ -229,8 +238,18 @@ describe("dashboard report management boundary", () => {
       url: "/dashboard/api/drafts",
     });
     expect(draftListResponseSchema.parse(ownList.json())).toMatchObject({
-      items: [{ id: stored.draftId, title: "Owner report" }],
+      items: [{ id: stored.draftId, title: "Owner report", viewCount: 1 }],
       total: 1,
+    });
+    const ownVersions = await application.inject({
+      headers: browserHeaders(ownerCookies),
+      method: "GET",
+      url: `/dashboard/api/drafts/${stored.draftId}/versions`,
+    });
+    expect(
+      draftVersionListResponseSchema.parse(ownVersions.json()),
+    ).toMatchObject({
+      items: [{ versionNumber: 1, viewCount: 1 }],
     });
 
     const otherList = await application.inject({

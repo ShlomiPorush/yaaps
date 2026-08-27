@@ -281,7 +281,8 @@
     "userDisabled": "Disabled",
     "usersHeading": "Users",
     "version": "Version",
-    "versionsHeading": "Saved versions"
+    "versionsHeading": "Saved versions",
+    "views": "Views: {count}"
   },
   "navigation": {
     "administration": "Admin",

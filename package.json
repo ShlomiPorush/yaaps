@@ -29,7 +29,7 @@
     "test:e2e": "playwright test --config config/playwright.config.ts",
     "test:e2e:run": "playwright test --config config/playwright.config.ts",
     "test:load": "vitest --config config/vitest.config.ts run apps/server/src/reports/load.test.ts",
-    "test:unit": "vitest --config config/vitest.config.ts run",
+    "test:unit": "vitest --config config/vitest.config.ts run --exclude apps/server/src/reports/load.test.ts && npm run test:load",
     "test:watch": "vitest --config config/vitest.config.ts",
     "test:workflows": "node --test tests/workflows/deferred-upgrades.test.mjs && bash tests/workflows/workflows.sh",
     "typecheck": "npm run typecheck --workspaces --if-present",

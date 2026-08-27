@@ -375,6 +375,57 @@ const reportResourcePolicy: Migration = {
   },
 };
 
+const reportViewCounts: Migration = {
+  async up(database) {
+    await database.transaction().execute(async (transaction) => {
+      await transaction.schema
+        .alterTable("drafts")
+        .addColumn("view_count", "integer", (column) =>
+          column
+            .notNull()
+            .defaultTo(0)
+            .check(sql`view_count >= 0`),
+        )
+        .execute();
+      await transaction.schema
+        .alterTable("versions")
+        .addColumn("view_count", "integer", (column) =>
+          column
+            .notNull()
+            .defaultTo(0)
+            .check(sql`view_count >= 0`),
+        )
+        .execute();
+      await sql`
+        create trigger report_version_view_count_sync
+        after update of view_count on versions
+        for each row
+        when new.view_count <> old.view_count
+        begin
+          update drafts
+          set view_count = view_count + (new.view_count - old.view_count)
+          where id = new.draft_id;
+        end
+      `.execute(transaction);
+    });
+  },
+  async down(database) {
+    await database.transaction().execute(async (transaction) => {
+      await sql`drop trigger if exists report_version_view_count_sync`.execute(
+        transaction,
+      );
+      await transaction.schema
+        .alterTable("versions")
+        .dropColumn("view_count")
+        .execute();
+      await transaction.schema
+        .alterTable("drafts")
+        .dropColumn("view_count")
+        .execute();
+    });
+  },
+};
+
 class YaapsMigrationProvider implements MigrationProvider {
   async getMigrations(): Promise<Record<string, Migration>> {
     return {
@@ -383,6 +434,7 @@ class YaapsMigrationProvider implements MigrationProvider {
       "003_device_connections": deviceConnections,
       "004_draft_categories": draftCategories,
       "005_report_resource_policy": reportResourcePolicy,
+      "006_report_view_counts": reportViewCounts,
     };
   }
 }

@@ -13,6 +13,8 @@ import {
   DOCUMENT_LIMITS,
   draftCategorySchema,
   draftListQuerySchema,
+  draftSummarySchema,
+  draftVersionSummarySchema,
   PRODUCT_NAME,
   RETENTION_LIMITS_SECONDS,
   healthResponseSchema,
@@ -222,6 +224,40 @@ describe("report resource policy contracts", () => {
     ).toEqual({ resourcePolicy: "isolated" });
     expect(() =>
       createDraftQuerySchema.parse({ resourcePolicy: "permissive" }),
+    ).toThrow();
+  });
+});
+
+describe("report view count contracts", () => {
+  const draft = {
+    category: null,
+    createdAt: "2026-08-24T08:00:00.000Z",
+    expiresAt: "2026-08-31T08:00:00.000Z",
+    id: "A".repeat(32),
+    latestVersionNumber: 1,
+    publicUrl: `https://share.example.test/d/${"A".repeat(32)}`,
+    resourcePolicy: "isolated",
+    status: "enabled",
+    title: null,
+    updatedAt: "2026-08-24T08:00:00.000Z",
+    viewCount: 12,
+  };
+
+  it("requires nonnegative integer counts on reports and versions", () => {
+    expect(draftSummarySchema.parse(draft).viewCount).toBe(12);
+    expect(
+      draftVersionSummarySchema.parse({
+        byteLength: 128,
+        createdAt: draft.createdAt,
+        publicUrl: `${draft.publicUrl}/v/1`,
+        resourcePolicy: "isolated",
+        sha256: "a".repeat(64),
+        versionNumber: 1,
+        viewCount: 7,
+      }).viewCount,
+    ).toBe(7);
+    expect(() =>
+      draftSummarySchema.parse({ ...draft, viewCount: -1 }),
     ).toThrow();
   });
 });

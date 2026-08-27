@@ -81,6 +81,7 @@ export function draftSummary(origin: string, draft: StoredDraft): DraftSummary {
     status: draft.status,
     title: draft.title,
     updatedAt: draft.updated_at,
+    viewCount: draft.view_count,
   };
 }
 
@@ -96,6 +97,7 @@ export function versionSummary(
     resourcePolicy: version.resourcePolicy,
     sha256: version.sha256,
     versionNumber: version.versionNumber,
+    viewCount: version.viewCount,
   };
 }
 

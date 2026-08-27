@@ -134,6 +134,61 @@ describe("owner-scoped draft storage", () => {
     });
   });
 
+  it("atomically records concurrent views against the exact served version", async () => {
+    const expiresAt = new Date(Date.now() + 60_000).toISOString();
+    const created = await storage.createDraft({
+      expiresAt,
+      html: html("<p>first</p>"),
+      ownerId: "user-first",
+    });
+    await storage.addVersion({
+      draftId: created.draftId,
+      expiresAt,
+      html: html("<p>second</p>"),
+      ownerId: "user-first",
+    });
+
+    await Promise.all([
+      ...Array.from({ length: 17 }, () =>
+        storage.recordPublicView(created.draftId, 1),
+      ),
+      ...Array.from({ length: 23 }, () =>
+        storage.recordPublicView(created.draftId, 2),
+      ),
+    ]);
+
+    const owned = await storage.findForOwner("user-first", created.draftId);
+    expect(owned?.view_count).toBe(40);
+    const versions = await storage.listVersionsForOwner(
+      "user-first",
+      created.draftId,
+      10,
+      0,
+    );
+    expect(versions.items).toMatchObject([
+      { versionNumber: 2, viewCount: 23 },
+      { versionNumber: 1, viewCount: 17 },
+    ]);
+    expect(
+      versions.items.reduce((total, item) => total + item.viewCount, 0),
+    ).toBe(owned?.view_count);
+    const [missingView, validView] = await Promise.allSettled([
+      storage.recordPublicView(created.draftId, 99),
+      storage.recordPublicView(created.draftId, 2),
+    ]);
+    expect(missingView).toMatchObject({ status: "rejected" });
+    expect(
+      missingView.status === "rejected" ? missingView.reason : undefined,
+    ).toBeInstanceOf(DraftNotFoundError);
+    expect(validView).toEqual({ status: "fulfilled", value: undefined });
+    await expect(
+      storage.findForOwner("user-first", created.draftId),
+    ).resolves.toMatchObject({ view_count: 41 });
+    await expect(
+      storage.listVersionsForOwner("user-second", created.draftId, 10, 0),
+    ).rejects.toBeInstanceOf(DraftNotFoundError);
+  });
+
   it("does not reveal or update another owner's draft", async () => {
     const created = await storage.createDraft({
       expiresAt: new Date(Date.now() + 60_000).toISOString(),

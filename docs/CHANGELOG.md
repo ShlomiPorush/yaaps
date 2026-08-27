@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Added
+
+- Show total public views for each report and immutable version in owner APIs and the dashboard.
+
 ### Changed
 
 - The YAAPS Agent Skill now selects connected publishing whenever a report automatically loads external HTTPS presentation resources, including web fonts, and reserves isolated publishing for fully embedded reports.

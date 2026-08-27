@@ -62,7 +62,6 @@ describe("bounded single-instance load", () => {
     const drafts = creations.map(
       (response) => publishDraftResponseSchema.parse(response.json()).draft,
     );
-
     for (let round = 2; round <= VERSION_ROUNDS + 1; round += 1) {
       const [versions, cleanup] = await Promise.all([
         Promise.all(
@@ -95,7 +94,6 @@ describe("bounded single-instance load", () => {
     expect(reads.flat().every((response) => response.statusCode === 200)).toBe(
       true,
     );
-
     const listed = await application.inject({
       headers: { authorization },
       method: "GET",
@@ -105,7 +103,9 @@ describe("bounded single-instance load", () => {
     expect(list.total).toBe(DRAFT_COUNT);
     expect(
       list.items.every(
-        (draft) => draft.latestVersionNumber === VERSION_ROUNDS + 1,
+        (draft) =>
+          draft.latestVersionNumber === VERSION_ROUNDS + 1 &&
+          draft.viewCount === READ_ROUNDS,
       ),
     ).toBe(true);
 
@@ -120,5 +120,19 @@ describe("bounded single-instance load", () => {
       .select(({ fn }) => fn.countAll<number>().as("count"))
       .executeTakeFirstOrThrow();
     expect(Number(versionCount.count)).toBe(DRAFT_COUNT * (VERSION_ROUNDS + 1));
+    const versionViews = await application
+      .yaapsData!.database.connection.selectFrom("versions")
+      .select(["version_number", "view_count"])
+      .execute();
+    expect(
+      versionViews.every((version) =>
+        version.version_number === VERSION_ROUNDS + 1
+          ? version.view_count === READ_ROUNDS
+          : version.view_count === 0,
+      ),
+    ).toBe(true);
+    expect(
+      versionViews.reduce((total, version) => total + version.view_count, 0),
+    ).toBe(DRAFT_COUNT * READ_ROUNDS);
   });
 });

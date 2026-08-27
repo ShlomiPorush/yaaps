@@ -113,6 +113,7 @@ export interface DraftsTable {
   status: DraftStatus;
   title: string | null;
   updated_at: string;
+  view_count: Generated<number>;
 }
 
 export interface VersionsTable {
@@ -125,6 +126,7 @@ export interface VersionsTable {
   sha256: string;
   uploaded_by_api_key_id: string | null;
   version_number: number;
+  view_count: Generated<number>;
 }
 
 export interface AuditEventsTable {
