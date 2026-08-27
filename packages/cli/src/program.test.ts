@@ -325,14 +325,14 @@ describe("CLI draft categories", () => {
     return { errors, output, program, requests };
   }
 
-  it("sends the category when creating a draft and when adding a version", async () => {
+  it("sends the connected default and category for every publication", async () => {
     const published = {
-      draft: summary,
+      draft: { ...summary, resourcePolicy: "connected" as const },
       version: {
         byteLength: 128,
         createdAt: "2026-08-26T00:00:00.000Z",
         publicUrl: `${summary.publicUrl}/v/2`,
-        resourcePolicy: "isolated",
+        resourcePolicy: "connected" as const,
         sha256: "a".repeat(64),
         versionNumber: 2,
         viewCount: 0,
@@ -351,7 +351,7 @@ describe("CLI draft categories", () => {
     ]);
     expect(created.errors).toEqual([]);
     expect(created.requests[0]?.url).toBe(
-      "https://share.example.test/api/drafts?resourcePolicy=isolated&category=Sales+reports",
+      "https://share.example.test/api/drafts?resourcePolicy=connected&category=Sales+reports",
     );
 
     const versioned = await buildProgram(published);
@@ -368,38 +368,38 @@ describe("CLI draft categories", () => {
     ]);
     expect(versioned.errors).toEqual([]);
     expect(versioned.requests[0]?.url).toBe(
-      `https://share.example.test/api/drafts/${draftId}/versions?resourcePolicy=isolated&category=Sales+reports`,
+      `https://share.example.test/api/drafts/${draftId}/versions?resourcePolicy=connected&category=Sales+reports`,
     );
   });
 
-  it("sends the selected connected resource policy", async () => {
+  it("sends the selected isolated resource policy", async () => {
     const published = {
       draft: summary,
       version: {
         byteLength: 128,
         createdAt: "2026-08-26T00:00:00.000Z",
         publicUrl: `${summary.publicUrl}/v/2`,
-        resourcePolicy: "connected",
+        resourcePolicy: "isolated" as const,
         sha256: "a".repeat(64),
         versionNumber: 2,
         viewCount: 0,
       },
     };
-    const connected = await buildProgram(published);
+    const isolated = await buildProgram(published);
 
-    await connected.program.parseAsync([
+    await isolated.program.parseAsync([
       "node",
       "yaaps",
       "publish",
       "report.html",
       "--mode",
-      "connected",
+      "isolated",
       "--json",
     ]);
 
-    expect(connected.errors).toEqual([]);
-    expect(connected.requests[0]?.url).toBe(
-      "https://share.example.test/api/drafts?resourcePolicy=connected",
+    expect(isolated.errors).toEqual([]);
+    expect(isolated.requests[0]?.url).toBe(
+      "https://share.example.test/api/drafts?resourcePolicy=isolated",
     );
   });
 

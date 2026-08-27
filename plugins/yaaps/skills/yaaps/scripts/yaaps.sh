@@ -368,7 +368,7 @@ case "$command_name" in
     [ "$#" -ge 1 ] || fail 'Usage: publish <html-file> [--mode isolated|connected] [--category <name>] [--draft-id <id>] [--title <title>] [--ttl <seconds>]'
     publish_file=$1; shift
     [ -f "$publish_file" ] || fail 'The HTML file does not exist.'
-    publish_category= publish_draft= publish_mode=isolated publish_title= publish_ttl=
+    publish_category= publish_draft= publish_mode=connected publish_title= publish_ttl=
     while [ "$#" -gt 0 ]; do
       case "$1" in
         --category) [ "$#" -ge 2 ] || fail '--category requires a value.'; publish_category=$2; shift 2 ;;

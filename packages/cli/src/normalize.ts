@@ -396,7 +396,7 @@ async function normalizeElement(
 
 export async function normalizeHtmlFile(
   filePath: string,
-  resourcePolicy: ReportResourcePolicy = "isolated",
+  resourcePolicy: ReportResourcePolicy = "connected",
 ): Promise<Buffer> {
   const absolutePath = path.resolve(filePath);
   let input: Buffer;

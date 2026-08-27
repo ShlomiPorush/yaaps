@@ -76,7 +76,7 @@ describe("CLI HTML normalization", () => {
       const htmlPath = path.join(directory, "report.html");
       await writeFile(htmlPath, document(body, head), "utf8");
 
-      await expect(normalizeHtmlFile(htmlPath)).rejects.toThrow(
+      await expect(normalizeHtmlFile(htmlPath, "isolated")).rejects.toThrow(
         "--mode connected",
       );
     },
@@ -122,7 +122,7 @@ describe("CLI HTML normalization", () => {
     },
   );
 
-  it("preserves HTTPS images, stylesheets, and CSS resources in connected mode", async () => {
+  it("preserves HTTPS images, stylesheets, and CSS resources in the default connected mode", async () => {
     const directory = await temporaryDirectory();
     const htmlPath = path.join(directory, "report.html");
     await writeFile(
@@ -134,9 +134,7 @@ describe("CLI HTML normalization", () => {
       "utf8",
     );
 
-    const normalized = (
-      await normalizeHtmlFile(htmlPath, "connected")
-    ).toString("utf8");
+    const normalized = (await normalizeHtmlFile(htmlPath)).toString("utf8");
 
     expect(normalized).toContain("https://cdn.example.com/chart.png");
     expect(normalized).toContain("https://cdn.example.com/background.webp");

@@ -100,7 +100,7 @@ export function DocumentationPage({ copy }: DocumentationPageProps) {
             <CodeBlock label="cURL">
               {`curl --fail-with-body \\
   --request POST \\
-  --url "$YAAPS_API_URL/api/drafts?category=Weekly&title=Weekly%20report&ttlSeconds=86400&resourcePolicy=connected" \\
+  --url "$YAAPS_API_URL/api/drafts?category=Weekly&title=Weekly%20report&ttlSeconds=86400" \\
   --header "Authorization: Bearer $YAAPS_API_KEY" \\
   --header "Content-Type: text/html" \\
   --data-binary @report.html`}

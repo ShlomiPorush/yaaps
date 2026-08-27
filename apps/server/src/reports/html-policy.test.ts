@@ -33,7 +33,7 @@ describe("server HTML policy", () => {
     expect(validateHtmlDocument(source, "connected")).toContain("Source");
   });
 
-  it("accepts only HTTPS presentation resources in connected reports", () => {
+  it("accepts only HTTPS presentation resources with the default connected policy", () => {
     const source = document(
       [
         '<img src="https://cdn.example.com/chart.png">',
@@ -47,7 +47,7 @@ describe("server HTML policy", () => {
       ].join(""),
     );
 
-    expect(validateHtmlDocument(source, "connected")).toContain("Connected");
+    expect(validateHtmlDocument(source)).toContain("Connected");
     expect(() => validateHtmlDocument(source, "isolated")).toThrowError(
       expect.objectContaining({ code: "ELEMENT_BLOCKED" }),
     );
@@ -208,9 +208,9 @@ describe("server HTML policy", () => {
         ? '<meta http-equiv="refresh" content="0;url=https://example.com">'
         : "<title>Report</title>";
 
-    expect(() => validateHtmlDocument(document(body, head))).toThrowError(
-      expect.objectContaining({ code }),
-    );
+    expect(() =>
+      validateHtmlDocument(document(body, head), "isolated"),
+    ).toThrowError(expect.objectContaining({ code }));
   });
 
   it("rejects CSS imports even when their URL is a string", () => {

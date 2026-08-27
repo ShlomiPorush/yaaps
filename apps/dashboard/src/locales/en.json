@@ -176,7 +176,7 @@
     "openApiAction": "Open the OpenAPI 3.1 spec",
     "openApiText": "View the complete API schema or use it to generate a client.",
     "quickStartHeading": "Publish a report",
-    "quickStartIntro": "Set your YAAPS base URL and API key, then send one complete HTML document in the request body. Choose connected to load external HTTPS images, stylesheets, and fonts; omit it for an isolated report. The optional category groups the report with related ones.",
+    "quickStartIntro": "Set your YAAPS base URL and API key, then send one complete HTML document in the request body. Connected is the default and may load external HTTPS images, stylesheets, and fonts. Choose isolated explicitly to block external resource loading. The optional category groups the report with related ones.",
     "redocAction": "Read the API in ReDoc",
     "redocText": "Browse a clean, searchable reference generated from the live specification.",
     "responseHeading": "Response",

@@ -69,12 +69,12 @@ const titleParameter = {
 
 const resourcePolicyParameter = {
   description:
-    "Resource loading policy for this immutable version. Isolated rejects automatic external loads; connected permits HTTPS images, fonts, and stylesheets while scripts and programmatic network access remain blocked. Defaults to isolated.",
+    "Resource loading policy for this immutable version. Connected permits HTTPS images, fonts, and stylesheets while scripts and programmatic network access remain blocked, and is the default. Choose isolated explicitly to reject automatic external loads.",
   in: "query",
   name: "resourcePolicy",
   required: false,
   schema: {
-    default: "isolated",
+    default: "connected",
     enum: ["isolated", "connected"],
     type: "string",
   },

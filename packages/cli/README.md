@@ -34,13 +34,13 @@ Publish a complete HTML document. Supported local bitmap references in HTML and 
 yaaps publish ./report.html --title "Weekly report"
 ```
 
-Publishing uses `--mode isolated` by default. Isolated reports may contain
-HTTPS hyperlinks, but they cannot load network resources. Use connected mode
-when a sketch or report intentionally depends on HTTPS images, stylesheets, or
-CSS resources such as web fonts:
+Publishing uses `--mode connected` by default. Connected reports may load HTTPS
+images, stylesheets, and CSS resources such as web fonts. Choose isolated mode
+explicitly when a report must not load network resources; HTTPS hyperlinks still
+work because readers choose whether to open them:
 
 ```sh
-yaaps publish ./prototype.html --mode connected
+yaaps publish ./report.html --mode isolated
 ```
 
 Connected mode preserves HTTPS image URLs, HTTPS URLs in CSS, and only

@@ -413,7 +413,7 @@ export function createProgram(dependencies: ProgramDependencies = {}): Command {
         "--mode <mode>",
         "Resource policy: isolated or connected",
         resourcePolicyOption,
-        "isolated",
+        "connected",
       )
       .option("--title <title>", "Set or update the report title")
       .option(

@@ -255,8 +255,6 @@ printf '{"health":{"status":"ok"},"readiness":{"status":"ready"}}\\n'
       const published = await runHelper(
         "publish",
         toShellPath(reportPath),
-        "--mode",
-        "connected",
         "--category",
         "Sh group",
         "--title",
@@ -587,7 +585,7 @@ describe.runIf(process.platform === "win32")(
           version: { versionNumber: 1 },
         });
         expect(requests.at(-1)?.url).toBe(
-          "/api/drafts?resourcePolicy=isolated&category=Test%20group&title=Test%20report&ttlSeconds=3600",
+          "/api/drafts?resourcePolicy=connected&category=Test%20group&title=Test%20report&ttlSeconds=3600",
         );
         expect(requests.at(-1)?.body).toBe(
           '<!doctype html><html lang="en"><head><title>Safe report</title></head><body><h1>Safe report</h1></body></html>',

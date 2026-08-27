@@ -142,7 +142,7 @@ export class DraftStorage {
 
   async createDraft(input: CreateDraftInput): Promise<StoredDraftVersion> {
     return this.#operations.run(async () => {
-      const resourcePolicy = input.resourcePolicy ?? "isolated";
+      const resourcePolicy = input.resourcePolicy ?? "connected";
       validateHtmlDocument(input.html, resourcePolicy);
       const blob = await this.blobs.store(input.html);
       // A leading "-" is valid base64url but hostile to command-line tools.
@@ -202,7 +202,7 @@ export class DraftStorage {
       if (!(await this.findForOwner(input.ownerId, input.draftId))) {
         throw new DraftNotFoundError();
       }
-      const resourcePolicy = input.resourcePolicy ?? "isolated";
+      const resourcePolicy = input.resourcePolicy ?? "connected";
       validateHtmlDocument(input.html, resourcePolicy);
       const blob = await this.blobs.store(input.html);
       const createdAt = new Date().toISOString();

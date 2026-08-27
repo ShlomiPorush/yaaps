@@ -605,7 +605,7 @@ test("completes the browser product lifecycle with real WebAuthn ceremonies", as
   expect(smoke.stdout).not.toContain(apiKey!);
 
   const published = await page.request.post("/api/drafts?title=E2E%20report", {
-    data: "<!doctype html><html><head><title>E2E report</title></head><body><h1>Published by Playwright</h1></body></html>",
+    data: '<!doctype html><html><head><title>E2E report</title><style>@font-face{font-family:E2EExternal;src:url("https://assets.example.test/connected.woff2")}</style></head><body><h1>Published by Playwright</h1></body></html>',
     headers: {
       authorization: `Bearer ${apiKey}`,
       "content-type": "text/html",
@@ -617,23 +617,23 @@ test("completes the browser product lifecycle with real WebAuthn ceremonies", as
     version: { resourcePolicy: string };
   };
   expect(publication).toMatchObject({
-    draft: { resourcePolicy: "isolated" },
-    version: { resourcePolicy: "isolated" },
+    draft: { resourcePolicy: "connected" },
+    version: { resourcePolicy: "connected" },
   });
-  const connectedVersion = await page.request.post(
-    `/api/drafts/${publication.draft.id}/versions?resourcePolicy=connected`,
+  const isolatedVersion = await page.request.post(
+    `/api/drafts/${publication.draft.id}/versions?resourcePolicy=isolated`,
     {
-      data: '<!doctype html><html><head><title>E2E report</title></head><body><h1>Published by Playwright</h1><img alt="External chart" src="https://assets.example.test/chart.png"></body></html>',
+      data: "<!doctype html><html><head><title>E2E report</title></head><body><h1>Published by Playwright</h1></body></html>",
       headers: {
         authorization: `Bearer ${apiKey}`,
         "content-type": "text/html",
       },
     },
   );
-  expect(connectedVersion.status()).toBe(201);
-  expect(await connectedVersion.json()).toMatchObject({
-    draft: { resourcePolicy: "connected" },
-    version: { resourcePolicy: "connected", versionNumber: 2 },
+  expect(isolatedVersion.status()).toBe(201);
+  expect(await isolatedVersion.json()).toMatchObject({
+    draft: { resourcePolicy: "isolated" },
+    version: { resourcePolicy: "isolated", versionNumber: 2 },
   });
 
   const releaseManagementRequests = await holdManagementRequests(page);
@@ -645,7 +645,7 @@ test("completes the browser product lifecycle with real WebAuthn ceremonies", as
   const report = page.locator(".draft-item", { hasText: "E2E report" });
   await expect(report).toBeVisible();
   await expect(
-    report.getByText(english.management.resourcePolicyConnected, {
+    report.getByText(english.management.resourcePolicyIsolated, {
       exact: true,
     }),
   ).toHaveCount(1);
@@ -653,12 +653,12 @@ test("completes the browser product lifecycle with real WebAuthn ceremonies", as
     .getByRole("button", { name: english.management.showVersions })
     .click();
   await expect(
-    report.getByText(english.management.resourcePolicyConnected, {
+    report.getByText(english.management.resourcePolicyIsolated, {
       exact: true,
     }),
   ).toHaveCount(2);
   await expect(
-    report.getByText(english.management.resourcePolicyIsolated, {
+    report.getByText(english.management.resourcePolicyConnected, {
       exact: true,
     }),
   ).toHaveCount(1);
@@ -666,19 +666,19 @@ test("completes the browser product lifecycle with real WebAuthn ceremonies", as
     .getByRole("button", { name: english.actions.switchLanguage })
     .click();
   await expect(
-    report.getByText(hebrew.management.resourcePolicyConnected, {
+    report.getByText(hebrew.management.resourcePolicyIsolated, {
       exact: true,
     }),
   ).toHaveCount(2);
   await expect(
-    report.getByText(hebrew.management.resourcePolicyIsolated, {
+    report.getByText(hebrew.management.resourcePolicyConnected, {
       exact: true,
     }),
   ).toHaveCount(1);
   await page.getByRole("button", { name: hebrew.actions.switchTheme }).click();
   await expect(
     report
-      .getByText(hebrew.management.resourcePolicyConnected, {
+      .getByText(hebrew.management.resourcePolicyIsolated, {
         exact: true,
       })
       .first(),
