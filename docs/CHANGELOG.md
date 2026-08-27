@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Changed
+
+- Connected publishing is now the default across the API, CLI, and Agent Skill helpers; choose isolated mode explicitly for reports that must block automatic external resource loading.
+
 ## [1.5.0] - 2026-08-27
 
 ### Added

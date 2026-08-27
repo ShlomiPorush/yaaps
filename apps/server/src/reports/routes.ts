@@ -39,7 +39,7 @@ export const CONNECTED_REPORT_CONTENT_SECURITY_POLICY = [
 
 // Retain the original export for callers that mean the default policy.
 export const REPORT_CONTENT_SECURITY_POLICY =
-  ISOLATED_REPORT_CONTENT_SECURITY_POLICY;
+  CONNECTED_REPORT_CONTENT_SECURITY_POLICY;
 
 const draftParametersSchema = z.object({
   draftId: draftIdSchema,

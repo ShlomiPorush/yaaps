@@ -98,7 +98,7 @@ describe("owner-scoped draft storage", () => {
     const expiresAt = new Date(Date.now() + 60_000).toISOString();
     const created = await storage.createDraft({
       expiresAt,
-      html: html('<a href="https://example.com">Source</a>'),
+      html: html('<img src="https://cdn.example.com/first.png">'),
       ownerId: "user-first",
     });
     const updated = await storage.addVersion({
@@ -106,29 +106,37 @@ describe("owner-scoped draft storage", () => {
       expiresAt,
       html: html('<img src="https://cdn.example.com/chart.png">'),
       ownerId: "user-first",
-      resourcePolicy: "connected",
+    });
+    const isolated = await storage.addVersion({
+      draftId: created.draftId,
+      expiresAt,
+      html: html('<a href="https://example.com">Source</a>'),
+      ownerId: "user-first",
+      resourcePolicy: "isolated",
     });
 
-    expect(created.resourcePolicy).toBe("isolated");
+    expect(created.resourcePolicy).toBe("connected");
     expect(updated.resourcePolicy).toBe("connected");
+    expect(isolated.resourcePolicy).toBe("isolated");
     await expect(
       storage.listVersionsForOwner("user-first", created.draftId, 10, 0),
     ).resolves.toMatchObject({
       items: [
+        { resourcePolicy: "isolated", versionNumber: 3 },
         { resourcePolicy: "connected", versionNumber: 2 },
-        { resourcePolicy: "isolated", versionNumber: 1 },
+        { resourcePolicy: "connected", versionNumber: 1 },
       ],
     });
     await expect(
       storage.findForOwner("user-first", created.draftId),
-    ).resolves.toMatchObject({ resourcePolicy: "connected" });
+    ).resolves.toMatchObject({ resourcePolicy: "isolated" });
     await expect(storage.resolvePublic(created.draftId)).resolves.toMatchObject(
-      { resourcePolicy: "connected", status: "available", versionNumber: 2 },
+      { resourcePolicy: "isolated", status: "available", versionNumber: 3 },
     );
     await expect(
       storage.resolvePublic(created.draftId, 1),
     ).resolves.toMatchObject({
-      resourcePolicy: "isolated",
+      resourcePolicy: "connected",
       status: "available",
       versionNumber: 1,
     });

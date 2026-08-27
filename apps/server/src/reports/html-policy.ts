@@ -334,7 +334,7 @@ function validateSingleDocumentTokenStructure(source: string): void {
 
 export function validateHtmlDocument(
   bytes: Uint8Array,
-  resourcePolicy: ReportResourcePolicy = "isolated",
+  resourcePolicy: ReportResourcePolicy = "connected",
 ): string {
   if (
     bytes.byteLength === 0 ||

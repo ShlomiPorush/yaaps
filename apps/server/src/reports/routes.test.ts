@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildApplication } from "../app.js";
 import {
   CONNECTED_REPORT_CONTENT_SECURITY_POLICY,
+  ISOLATED_REPORT_CONTENT_SECURITY_POLICY,
   REPORT_CONTENT_SECURITY_POLICY,
 } from "./routes.js";
 
@@ -43,7 +44,7 @@ afterEach(async () => {
 });
 
 describe("public report routes", () => {
-  it("serves canonical and numbered versions with server-controlled isolation", async () => {
+  it("serves canonical and numbered versions with server-controlled sandboxing", async () => {
     const firstHtml = html("<h1>First immutable version</h1>");
     const latestHtml = html("<h1>Latest version</h1>");
     const draft = await application.yaapsData!.drafts.createDraft({
@@ -101,6 +102,7 @@ describe("public report routes", () => {
       expiresAt: new Date(Date.now() + 60_000).toISOString(),
       html: html('<a href="https://example.com">Source</a>'),
       ownerId: "report-owner",
+      resourcePolicy: "isolated",
     });
     await application.yaapsData!.drafts.addVersion({
       draftId: first.draftId,
@@ -129,7 +131,7 @@ describe("public report routes", () => {
       "connect-src 'none'",
     );
     expect(original.headers["content-security-policy"]).toBe(
-      REPORT_CONTENT_SECURITY_POLICY,
+      ISOLATED_REPORT_CONTENT_SECURITY_POLICY,
     );
   });
 

@@ -50,7 +50,7 @@ describe("dashboard foundation", () => {
     )
       .map((element) => element.textContent)
       .join("\n");
-    expect(quickStartCode).toContain("resourcePolicy=connected");
+    expect(quickStartCode).not.toContain("resourcePolicy=connected");
     expect(quickStartCode).toContain('"resourcePolicy": "connected"');
     expect(
       screen.getByRole("link", {

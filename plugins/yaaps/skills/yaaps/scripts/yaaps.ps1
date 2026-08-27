@@ -247,7 +247,7 @@ try {
             if ($options.Positionals.Count -ne 1) { Fail 'Usage: publish <html-file> [--mode isolated|connected] [--category <name>] [--draft-id <id>] [--title <title>] [--ttl <seconds>]' }
             $file = [IO.Path]::GetFullPath([string]$options.Positionals[0])
             if (-not [IO.File]::Exists($file)) { Fail 'The HTML file does not exist.' }
-            $resourcePolicy = if ($options.ContainsKey('mode')) { [string]$options.mode } else { 'isolated' }
+            $resourcePolicy = if ($options.ContainsKey('mode')) { [string]$options.mode } else { 'connected' }
             if ($resourcePolicy -notin @('isolated', 'connected')) { Fail '--mode must be either isolated or connected.' }
             $credentials = Get-Credentials
             $route = '/api/drafts'

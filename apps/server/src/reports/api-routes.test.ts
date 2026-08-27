@@ -82,6 +82,10 @@ describe("agent report API", () => {
     });
 
     expect(response.statusCode).toBe(201);
+    expect(publishDraftResponseSchema.parse(response.json())).toMatchObject({
+      draft: { resourcePolicy: "connected" },
+      version: { resourcePolicy: "connected" },
+    });
   });
 
   it("publishes and exposes immutable per-version resource policies", async () => {
@@ -103,6 +107,21 @@ describe("agent report API", () => {
       version: { resourcePolicy: "connected", versionNumber: 1 },
     });
 
+    const defaulted = await application.inject({
+      headers: {
+        authorization: actor.authorization,
+        "content-type": "text/html",
+      },
+      method: "POST",
+      payload: html('<img src="https://cdn.example.com/default-chart.png">'),
+      url: `/api/drafts/${first.draft.id}/versions`,
+    });
+    expect(defaulted.statusCode).toBe(201);
+    expect(publishDraftResponseSchema.parse(defaulted.json())).toMatchObject({
+      draft: { resourcePolicy: "connected" },
+      version: { resourcePolicy: "connected", versionNumber: 2 },
+    });
+
     const isolated = await application.inject({
       headers: {
         authorization: actor.authorization,
@@ -110,12 +129,12 @@ describe("agent report API", () => {
       },
       method: "POST",
       payload: html('<a href="https://example.com">Source</a>'),
-      url: `/api/drafts/${first.draft.id}/versions`,
+      url: `/api/drafts/${first.draft.id}/versions?resourcePolicy=isolated`,
     });
     expect(isolated.statusCode).toBe(201);
     expect(publishDraftResponseSchema.parse(isolated.json())).toMatchObject({
       draft: { resourcePolicy: "isolated" },
-      version: { resourcePolicy: "isolated", versionNumber: 2 },
+      version: { resourcePolicy: "isolated", versionNumber: 3 },
     });
 
     const versions = await application.inject({
@@ -126,7 +145,8 @@ describe("agent report API", () => {
     expect(draftVersionListResponseSchema.parse(versions.json())).toMatchObject(
       {
         items: [
-          { resourcePolicy: "isolated", versionNumber: 2 },
+          { resourcePolicy: "isolated", versionNumber: 3 },
+          { resourcePolicy: "connected", versionNumber: 2 },
           { resourcePolicy: "connected", versionNumber: 1 },
         ],
       },

@@ -91,7 +91,7 @@ describe("foundation server", () => {
       expect.objectContaining({
         name: "resourcePolicy",
         schema: expect.objectContaining({
-          default: "isolated",
+          default: "connected",
           enum: ["isolated", "connected"],
         }),
       }),

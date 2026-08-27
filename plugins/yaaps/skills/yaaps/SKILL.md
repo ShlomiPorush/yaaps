@@ -37,12 +37,13 @@ The full key is created locally, the server receives only its hash and non-secre
 
 Publish only when asked. The input must already be one complete HTML file. The helpers send the file unchanged, so embed local files before publishing. Never add scripts, event handlers, forms, frames, plugins, HTTP resources, or fetch-capable constructs.
 
-Before running `publish`, inspect the final HTML and choose the resource policy mechanically:
+Before running `publish`, inspect the final HTML for external dependencies and use the resource policy as follows:
 
-- Use `connected` whenever the HTML contains an automatically loaded HTTPS image, an external HTTPS stylesheet, or an HTTPS CSS `url()`, including a web font in `@font-face`. Tell the user that opening the report contacts third-party servers and that those resources can change or disappear later.
-- Use `isolated` only when every automatically loaded resource is embedded in the HTML and the only HTTPS URLs are hyperlinks that a reader chooses to open. `isolated` is the default, but the default does not override this inspection.
+- `connected` is the default, including for a fully self-contained report. Omit `--mode` unless the user explicitly requests isolation or no automatic external contact.
+- When the HTML contains an automatically loaded HTTPS image, an external HTTPS stylesheet, or an HTTPS CSS `url()`, including a web font in `@font-face`, tell the user that opening the report contacts third-party servers and that those resources can change or disappear later.
+- Use `--mode isolated` only when the user explicitly requests isolation or no automatic external contact. The final HTML must then embed every automatically loaded resource; HTTPS hyperlinks that a reader chooses to open are still allowed.
 
-If the user requires `isolated` publishing or declines third-party contact, remove or embed the external dependencies before publishing. Never publish HTML with automatic external loads as `isolated`, and do not rely on a failed isolated publish to choose the mode.
+Do not remove or embed external dependencies merely to select `isolated`. If the user explicitly requests isolated publishing, remove or embed those dependencies before publishing. Never publish HTML with automatic external loads as `isolated`, and do not rely on a failed isolated publish to choose the mode.
 
 Both modes reject HTTP resources, scripts, event handlers, forms, frames, plugins, CSS imports, and other executable or unsafe resource constructs.
 
