@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 
-import type { Kysely, Transaction } from "kysely";
+import { sql, type Kysely, type Selectable, type Transaction } from "kysely";
 
 import type { ReportResourcePolicy } from "@yaaps/contracts";
 
@@ -50,6 +50,7 @@ export interface StoredDraftVersion {
   resourcePolicy: ReportResourcePolicy;
   sha256: string;
   versionNumber: number;
+  viewCount: number;
 }
 
 export interface StoredVersionMetadata {
@@ -58,11 +59,12 @@ export interface StoredVersionMetadata {
   resourcePolicy: ReportResourcePolicy;
   sha256: string;
   versionNumber: number;
+  viewCount: number;
 }
 
-export interface StoredDraft extends DraftsTable {
+export type StoredDraft = Selectable<DraftsTable> & {
   resourcePolicy: ReportResourcePolicy;
-}
+};
 
 export interface PaginatedDrafts {
   items: StoredDraft[];
@@ -102,6 +104,13 @@ export type PublicReportResolution =
   | { status: "expired" }
   | { status: "unavailable" };
 
+interface PendingPublicView {
+  draftId: string;
+  reject: (error: unknown) => void;
+  resolve: () => void;
+  versionNumber: number;
+}
+
 class ExclusiveOperations {
   #tail: Promise<void> = Promise.resolve();
 
@@ -122,6 +131,9 @@ class ExclusiveOperations {
 
 export class DraftStorage {
   readonly #operations = new ExclusiveOperations();
+  readonly #pendingPublicViews: PendingPublicView[] = [];
+  #publicViewFlushActive = false;
+  #publicViewFlushScheduled = false;
 
   constructor(
     private readonly database: Kysely<DatabaseSchema>,
@@ -180,6 +192,7 @@ export class DraftStorage {
         resourcePolicy,
         sha256: blob.sha256,
         versionNumber: 1,
+        viewCount: 0,
       };
     });
   }
@@ -246,6 +259,7 @@ export class DraftStorage {
         resourcePolicy,
         sha256: blob.sha256,
         versionNumber,
+        viewCount: 0,
       };
     });
   }
@@ -389,6 +403,7 @@ export class DraftStorage {
           "resource_policy",
           "sha256",
           "version_number",
+          "view_count",
         ])
         .where("draft_id", "=", draftId)
         .orderBy("version_number", "desc")
@@ -408,6 +423,7 @@ export class DraftStorage {
         resourcePolicy: item.resource_policy,
         sha256: item.sha256,
         versionNumber: item.version_number,
+        viewCount: item.view_count,
       })),
       total: Number(count.count),
     };
@@ -604,6 +620,85 @@ export class DraftStorage {
       title: draft.title,
       versionNumber,
     };
+  }
+
+  recordPublicView(draftId: string, versionNumber: number): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      this.#pendingPublicViews.push({
+        draftId,
+        reject,
+        resolve,
+        versionNumber,
+      });
+      this.#schedulePublicViewFlush();
+    });
+  }
+
+  #schedulePublicViewFlush(): void {
+    if (this.#publicViewFlushActive || this.#publicViewFlushScheduled) {
+      return;
+    }
+    this.#publicViewFlushScheduled = true;
+    setImmediate(() => {
+      this.#publicViewFlushScheduled = false;
+      this.#publicViewFlushActive = true;
+      void this.#flushPublicViews().finally(() => {
+        this.#publicViewFlushActive = false;
+        if (this.#pendingPublicViews.length > 0) {
+          this.#schedulePublicViewFlush();
+        }
+      });
+    });
+  }
+
+  async #flushPublicViews(): Promise<void> {
+    const pending = this.#pendingPublicViews.splice(0);
+    const grouped = new Map<
+      string,
+      {
+        count: number;
+        draftId: string;
+        versionNumber: number;
+        views: PendingPublicView[];
+      }
+    >();
+    for (const view of pending) {
+      const key = `${view.draftId}:${view.versionNumber}`;
+      const existing = grouped.get(key);
+      if (existing) {
+        existing.count += 1;
+        existing.views.push(view);
+      } else {
+        grouped.set(key, {
+          count: 1,
+          draftId: view.draftId,
+          versionNumber: view.versionNumber,
+          views: [view],
+        });
+      }
+    }
+
+    for (const group of grouped.values()) {
+      try {
+        // Migration 006 synchronizes the draft total in the same statement.
+        const version = await this.database
+          .updateTable("versions")
+          .set({ view_count: sql<number>`view_count + ${group.count}` })
+          .where("draft_id", "=", group.draftId)
+          .where("version_number", "=", group.versionNumber)
+          .executeTakeFirst();
+        if (version.numUpdatedRows !== 1n) {
+          throw new DraftNotFoundError();
+        }
+        for (const view of group.views) {
+          view.resolve();
+        }
+      } catch (error) {
+        for (const view of group.views) {
+          view.reject(error);
+        }
+      }
+    }
   }
 
   async cleanupOrphanedBlobs(): Promise<number> {

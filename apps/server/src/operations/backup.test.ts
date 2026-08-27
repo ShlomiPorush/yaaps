@@ -66,6 +66,8 @@ describe("coordinated data backup and restore", () => {
       title: "Backup report",
       uploadedByApiKeyId: null,
     });
+    await sourceDrafts.recordPublicView(draft.draftId, 1);
+    await sourceDrafts.recordPublicView(draft.draftId, 1);
 
     const manifest = await createBackup(
       source,
@@ -103,6 +105,20 @@ describe("coordinated data backup and restore", () => {
       status: "available",
       versionNumber: 1,
     });
+    await expect(
+      restoredDrafts.findForOwner(
+        "8f7c1ca3-edbc-4b4b-b349-d45322728936",
+        draft.draftId,
+      ),
+    ).resolves.toMatchObject({ view_count: 2 });
+    await expect(
+      restoredDrafts.listVersionsForOwner(
+        "8f7c1ca3-edbc-4b4b-b349-d45322728936",
+        draft.draftId,
+        10,
+        0,
+      ),
+    ).resolves.toMatchObject({ items: [{ viewCount: 2 }] });
   });
 
   it("refuses overwrite and removes partial restore state after corruption", async () => {

@@ -28,6 +28,7 @@ const draft = {
   status: "enabled" as const,
   title: "Quarterly report",
   updatedAt: "2026-08-24T09:00:00.000Z",
+  viewCount: 1_234,
 };
 
 const weeklyCategory = "Weekly reports";
@@ -263,9 +264,12 @@ describe("signed-in management dashboard", () => {
       }
       throw new Error(`Unexpected request: ${url}`);
     });
-    renderDashboard(fetchImplementation, "reports");
+    const { container } = renderDashboard(fetchImplementation, "reports");
 
     await screen.findByText(draft.title);
+    expect(container.querySelector(".draft-meta")).toHaveTextContent(
+      localeDocuments.en.management.views.replace("{count}", "1,234"),
+    );
     const summary = screen.getByLabelText(
       localeDocuments.en.management.summary,
     );
@@ -328,6 +332,7 @@ describe("signed-in management dashboard", () => {
         resourcePolicy: "connected" as const,
         sha256: "a".repeat(64),
         versionNumber: 2,
+        viewCount: 5_678,
       },
       {
         byteLength: 4_096,
@@ -336,6 +341,7 @@ describe("signed-in management dashboard", () => {
         resourcePolicy: "isolated" as const,
         sha256: "b".repeat(64),
         versionNumber: 1,
+        viewCount: 9,
       },
     ];
     const fetchImplementation = vi.fn<typeof fetch>(async (input) => {
@@ -363,7 +369,7 @@ describe("signed-in management dashboard", () => {
       if (url === "/api/meta") return json(serviceMetadata);
       throw new Error(`Unexpected request: ${url}`);
     });
-    renderDashboard(fetchImplementation, "reports", {
+    const { container } = renderDashboard(fetchImplementation, "reports", {
       copy: localeDocuments.he,
       locale: "he",
     });
@@ -373,6 +379,9 @@ describe("signed-in management dashboard", () => {
         localeDocuments.he.management.resourcePolicyConnected,
       ),
     ).toHaveClass("connected");
+    expect(container.querySelector(".draft-meta")).toHaveTextContent(
+      localeDocuments.he.management.views.replace("{count}", "1,234"),
+    );
     fireEvent.click(
       screen.getByRole("button", {
         name: localeDocuments.he.management.showVersions,
@@ -389,6 +398,9 @@ describe("signed-in management dashboard", () => {
     expect(
       screen.getByText(localeDocuments.he.management.resourcePolicyIsolated),
     ).toHaveClass("isolated");
+    expect(container.querySelector(".version-list")).toHaveTextContent(
+      localeDocuments.he.management.views.replace("{count}", "5,678"),
+    );
   });
 
   it("extends a report's expiry with a preset TTL from now", async () => {

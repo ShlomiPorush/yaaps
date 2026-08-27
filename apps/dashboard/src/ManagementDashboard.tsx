@@ -180,6 +180,12 @@ export function ManagementDashboard({
 
   const formatDate = (value: string) => formatLocaleDate(locale, value);
 
+  const formatViewCount = (value: number) =>
+    copy.management.views.replace(
+      "{count}",
+      new Intl.NumberFormat(locale).format(value),
+    );
+
   const formatExpiry = (value: string) => {
     const remaining = formatRemainingDuration(locale, value);
     const note = remaining
@@ -499,6 +505,8 @@ export function ManagementDashboard({
                   )}
                   {copy.management.version} {draft.latestVersionNumber}
                   <span aria-hidden="true"> · </span>
+                  {formatViewCount(draft.viewCount)}
+                  <span aria-hidden="true"> · </span>
                   {copy.management.expires} {formatExpiry(draft.expiresAt)}
                 </p>
               </div>
@@ -704,6 +712,7 @@ export function ManagementDashboard({
                     </span>
                     <small>
                       {formatDate(version.createdAt)} ·{" "}
+                      {formatViewCount(version.viewCount)} ·{" "}
                       {Math.ceil(version.byteLength / 1024)} KB
                     </small>
                   </a>

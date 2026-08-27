@@ -281,7 +281,8 @@
     "userDisabled": "מושבת",
     "usersHeading": "משתמשים",
     "version": "גרסה",
-    "versionsHeading": "גרסאות שמורות"
+    "versionsHeading": "גרסאות שמורות",
+    "views": "כניסות: {count}"
   },
   "navigation": {
     "administration": "ניהול",

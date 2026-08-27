@@ -182,6 +182,7 @@ describe("CLI commands with dash-leading draft IDs", () => {
     status: "disabled",
     title: "Dash report",
     updatedAt: "2026-08-26T00:00:00.000Z",
+    viewCount: 0,
   };
 
   async function buildProgram(response: Response) {
@@ -278,6 +279,7 @@ describe("CLI draft categories", () => {
     status: "enabled",
     title: "Quarterly report",
     updatedAt: "2026-08-26T00:00:00.000Z",
+    viewCount: 0,
   };
 
   async function buildProgram(
@@ -333,6 +335,7 @@ describe("CLI draft categories", () => {
         resourcePolicy: "isolated",
         sha256: "a".repeat(64),
         versionNumber: 2,
+        viewCount: 0,
       },
     };
 
@@ -379,6 +382,7 @@ describe("CLI draft categories", () => {
         resourcePolicy: "connected",
         sha256: "a".repeat(64),
         versionNumber: 2,
+        viewCount: 0,
       },
     };
     const connected = await buildProgram(published);
@@ -442,6 +446,7 @@ describe("CLI draft categories", () => {
                   resourcePolicy: "connected",
                   sha256: "a".repeat(64),
                   versionNumber: 2,
+                  viewCount: 0,
                 },
               ],
               limit: 100,

@@ -32,7 +32,7 @@ Remove-Item Env:YAAPS_SMOKE_API_KEY
 
 The workflow verifies health and readiness through the CLI, publishes a temporary self-contained report, checks its public body and sandbox CSP, disables and re-enables it, deletes it, and confirms that it is unavailable. Its `finally` path attempts exact-draft cleanup after a failure. The full API key is never printed or accepted as a command-line argument.
 
-Run `npm run test:load` locally for the bounded single-instance concurrency drill. It publishes 16 drafts and 64 immutable versions, performs 320 concurrent public reads while cleanup runs between write rounds, and finishes with SQLite integrity and metadata-count checks. This is a repeatable safety drill, not a capacity claim for the deployment host.
+Run `npm run test:load` locally for the bounded single-instance concurrency drill. The unit-test command schedules this drill as a separate phase so unrelated test workers cannot distort its timing. It publishes 16 drafts and 64 immutable versions, performs 320 concurrent public reads while cleanup runs between write rounds, and finishes with SQLite integrity and metadata-count checks. This is a repeatable safety drill, not a capacity claim for the deployment host.
 
 ## Backup
 

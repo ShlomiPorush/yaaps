@@ -211,6 +211,32 @@ describe("agent report API", () => {
       url: `/d/${first.draft.id}`,
     });
     expect(publicLatest.body).toContain("Second version");
+    await application.inject({
+      method: "GET",
+      url: `/d/${first.draft.id}/v/1`,
+    });
+    const countedDraft = await application.inject({
+      headers: { authorization: actor.authorization },
+      method: "GET",
+      url: `/api/drafts/${first.draft.id}`,
+    });
+    expect(draftSummarySchema.parse(countedDraft.json()).viewCount).toBe(2);
+    const countedVersions = await application.inject({
+      headers: { authorization: actor.authorization },
+      method: "GET",
+      url: `/api/drafts/${first.draft.id}/versions`,
+    });
+    expect(
+      draftVersionListResponseSchema
+        .parse(countedVersions.json())
+        .items.map(({ versionNumber, viewCount }) => ({
+          versionNumber,
+          viewCount,
+        })),
+    ).toEqual([
+      { versionNumber: 2, viewCount: 1 },
+      { versionNumber: 1, viewCount: 1 },
+    ]);
 
     const auditActions = (
       await application
