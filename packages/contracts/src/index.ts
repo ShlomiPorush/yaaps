@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const PRODUCT_NAME = "YAAPS" as const;
 export const DEFAULT_SERVICE_ORIGIN = "https://yaaps.net" as const;
-export const FOUNDATION_VERSION = "1.5.0" as const;
+export const FOUNDATION_VERSION = "1.6.0" as const;
 
 export const RETENTION_LIMITS_SECONDS = {
   default: 7 * 24 * 60 * 60,
