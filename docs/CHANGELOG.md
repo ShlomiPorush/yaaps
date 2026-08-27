@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Changed
+
+- The YAAPS Agent Skill now selects connected publishing whenever a report automatically loads external HTTPS presentation resources, including web fonts, and reserves isolated publishing for fully embedded reports.
+
 ## [1.4.0] - 2026-08-27
 
 ### Added

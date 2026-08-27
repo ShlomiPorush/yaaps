@@ -37,15 +37,17 @@ The full key is created locally, the server receives only its hash and non-secre
 
 Publish only when asked. The input must already be one complete HTML file. The helpers send the file unchanged, so embed local files before publishing. Never add scripts, event handlers, forms, frames, plugins, HTTP resources, or fetch-capable constructs.
 
+Before running `publish`, inspect the final HTML and choose the resource policy mechanically:
+
+- Use `connected` whenever the HTML contains an automatically loaded HTTPS image, an external HTTPS stylesheet, or an HTTPS CSS `url()`, including a web font in `@font-face`. Tell the user that opening the report contacts third-party servers and that those resources can change or disappear later.
+- Use `isolated` only when every automatically loaded resource is embedded in the HTML and the only HTTPS URLs are hyperlinks that a reader chooses to open. `isolated` is the default, but the default does not override this inspection.
+
+If the user requires `isolated` publishing or declines third-party contact, remove or embed the external dependencies before publishing. Never publish HTML with automatic external loads as `isolated`, and do not rely on a failed isolated publish to choose the mode.
+
+Both modes reject HTTP resources, scripts, event handlers, forms, frames, plugins, CSS imports, and other executable or unsafe resource constructs.
+
 - New draft: `<helper> publish <file> [--mode isolated|connected] [--category <name>] [--title <title>] [--ttl <seconds>]`
 - New immutable version: identify the intended draft first, then run `<helper> publish <file> --draft-id <draft-id> [--mode isolated|connected] [--category <name>] [--title <title>] [--ttl <seconds>]`
-
-Choose the resource policy for every published version:
-
-- `isolated` is the default. It permits HTTPS hyperlinks that a reader chooses to open, but rejects automatic network loads. Use it when the report is self-contained.
-- `connected` permits HTTPS images, external HTTPS stylesheets, and HTTPS resources referenced by CSS, including web fonts. Use it only when the report intentionally needs those dependencies. Tell the user that opening the report contacts third-party servers and that those resources can change or disappear later.
-
-Both modes reject HTTP resources, scripts, event handlers, forms, frames, plugins, CSS imports, and other executable or unsafe resource constructs. A failed isolated publish should be retried with `--mode connected` only when the external dependencies are intentional and the user authorized a connected report.
 
 A category is a single free-text label of at most 100 characters that groups related reports; a draft has at most one. Pass `--category` only when the user names a group or an existing category clearly applies. Publishing a new version with `--category` replaces the draft's stored category, so omit the flag to keep it.
 
