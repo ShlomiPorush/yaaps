@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+## [1.7.1] - 2026-09-08
+
+### Changed
+
+- Updated runtime dependencies to Zod 4.5.4 and SimpleWebAuthn server 13.3.3, and refreshed development dependencies for testing, linting, Node.js types, and React tooling.
+- Zod string limits now count Unicode code points instead of UTF-16 code units. Older CLI versions may reject metadata accepted by the new server when it exceeds the previous UTF-16 limits. Bootstrap secrets containing characters outside the Basic Multilingual Plane must meet the minimum of 32 Unicode code points.
+
 ## [1.7.0] - 2026-09-08
 
 ### Changed
