@@ -121,7 +121,7 @@ printf '{"health":{"status":"ok"},"readiness":{"status":"ready"}}\\n'
     );
     temporaryPaths.push(testDirectory);
     const apiKey = `yaaps_${"p".repeat(10)}_${"s".repeat(43)}`;
-    const draftId = "E".repeat(32);
+    const draftId = "Ee0123456789abcd";
     const draft = {
       category: null as string | null,
       createdAt: "2026-08-24T00:00:00.000Z",
@@ -357,7 +357,7 @@ describe.runIf(process.platform === "win32")(
         body: string;
         url: string;
       }> = [];
-      const draftId = "D".repeat(32);
+      const draftId = "Dd0123456789abcd";
       const draft = {
         category: null as string | null,
         createdAt: "2026-08-24T00:00:00.000Z",

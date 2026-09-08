@@ -267,7 +267,7 @@ describe("CLI commands with dash-leading draft IDs", () => {
 });
 
 describe("CLI draft categories", () => {
-  const draftId = "C".repeat(32);
+  const draftId = "Cc0123456789abcd";
   const summary = {
     category: "Sales",
     createdAt: "2026-08-26T00:00:00.000Z",

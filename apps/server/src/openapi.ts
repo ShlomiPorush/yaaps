@@ -3,6 +3,7 @@ import {
   createDeviceConnectionRequestSchema,
   createDeviceConnectionResponseSchema,
   DOCUMENT_LIMITS,
+  draftIdSchema,
   draftListResponseSchema,
   draftSummarySchema,
   draftVersionListResponseSchema,
@@ -29,11 +30,12 @@ const reference = (name: string) => ({ $ref: `#/components/schemas/${name}` });
 const bearerSecurity = [{ bearerAuth: [] }];
 
 const draftIdParameter = {
-  description: "A 32-character high-entropy draft identifier.",
+  description:
+    "A 16-character alphanumeric draft identifier, or a legacy 32-character identifier.",
   in: "path",
   name: "draftId",
   required: true,
-  schema: { pattern: "^[A-Za-z0-9_-]{32}$", type: "string" },
+  schema: schema(draftIdSchema),
 };
 
 const versionParameter = {

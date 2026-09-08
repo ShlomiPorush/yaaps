@@ -92,7 +92,7 @@ function resourcePolicyOption(value: string): ReportResourcePolicy {
 
 const DRAFT_ID_OPERAND = /^-[A-Za-z0-9_-]{31}$/;
 
-// Draft IDs are 32 random base64url characters, so roughly one in 64 starts
+// Legacy draft IDs are 32 random base64url characters, so roughly one in 64 starts
 // with "-", which commander would reject as an unknown option. Commander has
 // no operand escape besides "--", so the raw argv is rewritten to hoist such
 // IDs behind one terminator while option values stay attached to their flags.

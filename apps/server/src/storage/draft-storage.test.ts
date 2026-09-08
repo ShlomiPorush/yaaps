@@ -79,6 +79,8 @@ describe("owner-scoped draft storage", () => {
       ownerId: "user-first",
     });
 
+    expect(created.draftId).toMatch(/^[A-Za-z0-9]{16}$/);
+    expect(updated.draftId).toBe(created.draftId);
     expect(updated.versionNumber).toBe(2);
     const resolution = await storage.resolvePublic(created.draftId);
     expect(resolution.status).toBe("available");

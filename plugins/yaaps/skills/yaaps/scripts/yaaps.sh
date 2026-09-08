@@ -137,7 +137,7 @@ normalize_origin() {
 url_encode() { yaaps_js urlencode "$1"; }
 
 assert_draft_id() {
-  printf '%s' "$1" | LC_ALL=C grep -Eq '^[A-Za-z0-9_-]{32}$' || fail 'The draft ID format is invalid.'
+  printf '%s' "$1" | LC_ALL=C grep -Eq '^([A-Za-z0-9]{16}|[A-Za-z0-9_-]{32})$' || fail 'The draft ID format is invalid.'
   printf '%s\n' "$1"
 }
 

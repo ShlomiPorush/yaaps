@@ -44,58 +44,103 @@ afterEach(async () => {
 });
 
 describe("public report routes", () => {
-  it("serves canonical and numbered versions with server-controlled sandboxing", async () => {
-    const firstHtml = html("<h1>First immutable version</h1>");
-    const latestHtml = html("<h1>Latest version</h1>");
-    const draft = await application.yaapsData!.drafts.createDraft({
-      expiresAt: new Date(Date.now() + 60_000).toISOString(),
-      html: firstHtml,
-      ownerId: "report-owner",
-    });
-    await application.yaapsData!.drafts.addVersion({
-      draftId: draft.draftId,
-      expiresAt: new Date(Date.now() + 60_000).toISOString(),
-      html: latestHtml,
-      ownerId: "report-owner",
-    });
+  it.each([false, true])(
+    "serves canonical and numbered versions with server-controlled sandboxing (legacy ID: %s)",
+    async (legacy) => {
+      const firstHtml = html("<h1>First immutable version</h1>");
+      const latestHtml = html("<h1>Latest version</h1>");
+      const draft = await application.yaapsData!.drafts.createDraft({
+        expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        html: firstHtml,
+        ownerId: "report-owner",
+      });
+      expect(draft.draftId).toMatch(/^[A-Za-z0-9]{16}$/);
+      if (legacy) {
+        const database = application.yaapsData!.database.connection;
+        const legacyId = `-_${"a".repeat(30)}`;
+        await database.transaction().execute(async (transaction) => {
+          const stored = await transaction
+            .selectFrom("drafts")
+            .selectAll()
+            .where("id", "=", draft.draftId)
+            .executeTakeFirstOrThrow();
+          await transaction
+            .insertInto("drafts")
+            .values({ ...stored, id: legacyId })
+            .execute();
+          await transaction
+            .updateTable("versions")
+            .set({ draft_id: legacyId })
+            .where("draft_id", "=", draft.draftId)
+            .execute();
+          await transaction
+            .deleteFrom("drafts")
+            .where("id", "=", draft.draftId)
+            .execute();
+        });
+        draft.draftId = legacyId;
+      }
+      expect(
+        await application.yaapsData!.drafts.findForOwner(
+          "other-owner",
+          draft.draftId,
+        ),
+      ).toBeUndefined();
+      await expect(
+        application.yaapsData!.drafts.addVersion({
+          draftId: draft.draftId,
+          expiresAt: new Date(Date.now() + 60_000).toISOString(),
+          html: html("<p>Unauthorized version</p>"),
+          ownerId: "other-owner",
+        }),
+      ).rejects.toThrow("The draft was not found.");
+      await application.yaapsData!.drafts.addVersion({
+        draftId: draft.draftId,
+        expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        html: latestHtml,
+        ownerId: "report-owner",
+      });
 
-    const canonical = await application.inject({
-      method: "GET",
-      url: `/d/${draft.draftId}`,
-    });
-    const version = await application.inject({
-      method: "GET",
-      url: `/d/${draft.draftId}/v/1`,
-    });
+      const canonical = await application.inject({
+        method: "GET",
+        url: `/d/${draft.draftId}`,
+      });
+      const version = await application.inject({
+        method: "GET",
+        url: `/d/${draft.draftId}/v/1`,
+      });
 
-    expect(canonical.statusCode).toBe(200);
-    expect(canonical.body).toContain("<h1>Latest version</h1>");
-    expect(version.statusCode).toBe(200);
-    expect(version.body).toContain("<h1>First immutable version</h1>");
-    // Share-preview metadata is injected at serve time so link crawlers show
-    // the branded card instead of scraping report text.
-    expect(canonical.body).toContain('property="og:image"');
-    expect(canonical.body).toContain("/og-report.png");
-    expect(canonical.body).toContain('name="twitter:card"');
-    expect(canonical.headers["content-type"]).toBe("text/html; charset=utf-8");
-    expect(canonical.headers["content-security-policy"]).toBe(
-      REPORT_CONTENT_SECURITY_POLICY,
-    );
-    expect(canonical.headers["content-security-policy"]).toContain(
-      "allow-popups",
-    );
-    expect(canonical.headers["content-security-policy"]).not.toContain(
-      "allow-scripts",
-    );
-    expect(canonical.headers["content-security-policy"]).not.toContain(
-      "allow-same-origin",
-    );
-    expect(canonical.headers["cache-control"]).toBe("private, no-store");
-    expect(canonical.headers["referrer-policy"]).toBe("no-referrer");
-    expect(canonical.headers["x-content-type-options"]).toBe("nosniff");
-    expect(canonical.headers["x-robots-tag"]).toContain("noindex");
-    expect(canonical.headers["permissions-policy"]).toContain("camera=()");
-  });
+      expect(canonical.statusCode).toBe(200);
+      expect(canonical.body).toContain("<h1>Latest version</h1>");
+      expect(version.statusCode).toBe(200);
+      expect(version.body).toContain("<h1>First immutable version</h1>");
+      // Share-preview metadata is injected at serve time so link crawlers show
+      // the branded card instead of scraping report text.
+      expect(canonical.body).toContain('property="og:image"');
+      expect(canonical.body).toContain("/og-report.png");
+      expect(canonical.body).toContain('name="twitter:card"');
+      expect(canonical.headers["content-type"]).toBe(
+        "text/html; charset=utf-8",
+      );
+      expect(canonical.headers["content-security-policy"]).toBe(
+        REPORT_CONTENT_SECURITY_POLICY,
+      );
+      expect(canonical.headers["content-security-policy"]).toContain(
+        "allow-popups",
+      );
+      expect(canonical.headers["content-security-policy"]).not.toContain(
+        "allow-scripts",
+      );
+      expect(canonical.headers["content-security-policy"]).not.toContain(
+        "allow-same-origin",
+      );
+      expect(canonical.headers["cache-control"]).toBe("private, no-store");
+      expect(canonical.headers["referrer-policy"]).toBe("no-referrer");
+      expect(canonical.headers["x-content-type-options"]).toBe("nosniff");
+      expect(canonical.headers["x-robots-tag"]).toContain("noindex");
+      expect(canonical.headers["permissions-policy"]).toContain("camera=()");
+    },
+  );
 
   it("serves each immutable version with its recorded resource-policy CSP", async () => {
     const first = await application.yaapsData!.drafts.createDraft({
