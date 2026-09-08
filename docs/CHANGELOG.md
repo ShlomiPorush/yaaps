@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Changed
+
+- New report links use 16-character random identifiers containing only English letters and digits. Existing report links remain valid.
+
 ## [1.6.1] - 2026-09-01
 
 ### Changed

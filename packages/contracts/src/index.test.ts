@@ -12,6 +12,7 @@ import {
   createInvitationRequestSchema,
   DOCUMENT_LIMITS,
   draftCategorySchema,
+  draftIdSchema,
   draftListQuerySchema,
   draftSummarySchema,
   draftVersionSummarySchema,
@@ -26,6 +27,27 @@ import {
 } from "./index.js";
 
 describe("public contracts", () => {
+  it.each(["AbCd0123456789xy", "A".repeat(32), `-_${"a".repeat(30)}`])(
+    "accepts current and legacy draft ID %s",
+    (id) => {
+      expect(draftIdSchema.parse(id)).toBe(id);
+    },
+  );
+
+  it.each([
+    "",
+    "a".repeat(15),
+    "a".repeat(17),
+    "a".repeat(31),
+    "a".repeat(33),
+    `-${"a".repeat(15)}`,
+    `_${"a".repeat(15)}`,
+    `${"a".repeat(15)}!`,
+    `${"a".repeat(15)}é`,
+    `../${"a".repeat(13)}`,
+  ])("rejects invalid draft ID %s", (id) => {
+    expect(draftIdSchema.safeParse(id).success).toBe(false);
+  });
   it("accepts the stable health response", () => {
     expect(
       healthResponseSchema.parse({

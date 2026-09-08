@@ -59,7 +59,7 @@ function Normalize-Origin([string]$Value) {
 }
 
 function Assert-DraftId([string]$Value) {
-    if ($Value -notmatch '^[A-Za-z0-9_-]{32}$') { Fail 'The draft ID format is invalid.' }
+    if ($Value -notmatch '^([A-Za-z0-9]{16}|[A-Za-z0-9_-]{32})$') { Fail 'The draft ID format is invalid.' }
     return $Value
 }
 

@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from "node:crypto";
+import { randomInt, randomUUID } from "node:crypto";
 
 import { sql, type Kysely, type Selectable, type Transaction } from "kysely";
 
@@ -145,11 +145,13 @@ export class DraftStorage {
       const resourcePolicy = input.resourcePolicy ?? "connected";
       validateHtmlDocument(input.html, resourcePolicy);
       const blob = await this.blobs.store(input.html);
-      // A leading "-" is valid base64url but hostile to command-line tools.
-      let draftId = randomBytes(24).toString("base64url");
-      while (draftId.startsWith("-")) {
-        draftId = randomBytes(24).toString("base64url");
-      }
+      // randomInt avoids modulo bias across the 62-character alphabet.
+      const alphabet =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+      const draftId = Array.from(
+        { length: 16 },
+        () => alphabet[randomInt(alphabet.length)],
+      ).join("");
       const createdAt = new Date().toISOString();
 
       await this.database.transaction().execute(async (transaction) => {

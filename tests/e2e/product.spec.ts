@@ -14,7 +14,7 @@ import {
 } from "@playwright/test";
 
 const BOOTSTRAP_SECRET = "yaaps-playwright-bootstrap-secret-2026";
-const SECURITY_REPORT_URL = `http://localhost:4174/d/${"S".repeat(32)}`;
+const SECURITY_REPORT_URL = `http://localhost:4174/d/${"S".repeat(16)}`;
 const CONNECTED_REPORT_URL = `http://localhost:4174/d/${"C".repeat(32)}`;
 const execFileAsync = promisify(execFile);
 const bashExecutable =

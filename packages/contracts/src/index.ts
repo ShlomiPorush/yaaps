@@ -21,7 +21,9 @@ export const draftCategorySchema = z
   .min(1)
   .max(100)
   .refine((value) => !/\p{Cc}/u.test(value));
-export const draftIdSchema = z.string().regex(/^[A-Za-z0-9_-]{32}$/);
+export const draftIdSchema = z
+  .string()
+  .regex(/^(?:[A-Za-z0-9]{16}|[A-Za-z0-9_-]{32})$/);
 export const draftStatusSchema = z.enum(["enabled", "disabled"]);
 export const reportResourcePolicySchema = z.enum(["isolated", "connected"]);
 export const draftTitleSchema = z.string().trim().min(1).max(200);

@@ -9,7 +9,7 @@ import { buildApplication } from "../apps/server/src/app.js";
 
 const MAIN_ORIGIN = "http://localhost:4173";
 const SECURITY_ORIGIN = "http://localhost:4174";
-const SECURITY_DRAFT_ID = "S".repeat(32);
+const SECURITY_DRAFT_ID = "S".repeat(16);
 const CONNECTED_DRAFT_ID = "C".repeat(32);
 
 export default async function globalSetup(_config: FullConfig) {
