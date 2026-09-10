@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Pinned the transitive `js-yaml` dependency to 4.3.2, which removes the high-severity advisory reported for the version bundled with the API documentation renderer.
 
+### Fixed
+
+- API key parsing no longer scans the `Authorization` header with an ambiguous pattern, so an unauthenticated request with a long malformed key can no longer stall the server.
+
 ## [1.7.1] - 2026-09-08
 
 ### Changed

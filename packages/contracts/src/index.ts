@@ -180,9 +180,22 @@ export const updateApiKeyRequestSchema = z.object({
   label: apiKeyLabelSchema,
 });
 export const apiKeyPrefixSchema = z.string().regex(/^yaaps_[A-Za-z0-9_-]{10}$/);
-export const apiKeySchema = z
-  .string()
-  .regex(/^yaaps_[A-Za-z0-9_-]+_[A-Za-z0-9_-]+$/);
+const API_KEY_NAMESPACE = "yaaps_";
+const apiKeyBodyPattern = /^[A-Za-z0-9_-]{1,128}$/;
+
+// A key is `yaaps_<prefix>_<secret>`. The random prefix is base64url and may
+// contain underscores of its own, so the separator is located by position
+// instead of a second quantifier: two overlapping quantifiers made this check
+// quadratic on unauthenticated input.
+export function isApiKey(value: string): boolean {
+  if (!value.startsWith(API_KEY_NAMESPACE)) {
+    return false;
+  }
+  const body = value.slice(API_KEY_NAMESPACE.length);
+  return apiKeyBodyPattern.test(body) && body.slice(1, -1).includes("_");
+}
+
+export const apiKeySchema = z.string().refine(isApiKey);
 export const deviceConnectionUserCodeSchema = z
   .string()
   .trim()

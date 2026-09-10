@@ -69,6 +69,20 @@ describe("agent report API", () => {
     expect(response.statusCode).toBe(200);
   });
 
+  it("rejects an oversized bearer token without scanning it quadratically", async () => {
+    const startedAt = process.hrtime.bigint();
+    const response = await application.inject({
+      headers: { authorization: `Bearer yaaps_${"_".repeat(16_000)}!` },
+      method: "GET",
+      url: "/api/drafts",
+    });
+    const elapsedMilliseconds =
+      Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+
+    expect(response.statusCode).toBe(401);
+    expect(elapsedMilliseconds).toBeLessThan(100);
+  });
+
   it("completes an authenticated HTML upload", async () => {
     const actor = await identity("Minimal uploader");
     const response = await application.inject({
