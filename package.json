@@ -36,6 +36,9 @@
     "verify": "bash .github/tools/verify.sh",
     "version:sync": "node .github/tools/sync-version.mjs"
   },
+  "overrides": {
+    "js-yaml": "4.3.2"
+  },
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@playwright/test": "1.62.1",
