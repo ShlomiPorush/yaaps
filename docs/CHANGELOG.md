@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+## [1.7.2] - 2026-09-10
+
 ### Changed
 
 - Pinned the transitive `js-yaml` dependency to 4.3.2, which removes the high-severity advisory reported for the version bundled with the API documentation renderer.
