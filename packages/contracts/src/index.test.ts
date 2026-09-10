@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   addDraftVersionQuerySchema,
   apiKeyListResponseSchema,
+  apiKeySchema,
   browserSessionResponseSchema,
   categoryListResponseSchema,
   createApiKeyRequestSchema,
@@ -16,6 +17,7 @@ import {
   draftListQuerySchema,
   draftSummarySchema,
   draftVersionSummarySchema,
+  isApiKey,
   PRODUCT_NAME,
   RETENTION_LIMITS_SECONDS,
   healthResponseSchema,
@@ -138,6 +140,39 @@ describe("public contracts", () => {
         role: "owner",
       }),
     ).toThrow();
+  });
+
+  it.each([
+    `yaaps_${"p".repeat(10)}_${"s".repeat(43)}`,
+    "yaaps_aUy_0fgZgg_aUy_0fgZggRestOfSecret",
+    "yaaps_oldprefix_oldsecret",
+  ])("accepts the issued key shape %s", (key) => {
+    expect(isApiKey(key)).toBe(true);
+    expect(apiKeySchema.parse(key)).toBe(key);
+  });
+
+  it.each([
+    "",
+    "yaaps_",
+    "yaaps_nosecret",
+    "yaaps__leading",
+    "yaaps_trailing_",
+    "other_prefix_secret",
+    "yaaps_prefix_secret ",
+    `yaaps_prefix_${"s".repeat(200)}`,
+  ])("rejects the malformed key %s", (key) => {
+    expect(isApiKey(key)).toBe(false);
+    expect(apiKeySchema.safeParse(key).success).toBe(false);
+  });
+
+  it("validates an unauthenticated key in linear time", () => {
+    const hostile = `yaaps_${"_".repeat(16_000)}!`;
+    const startedAt = process.hrtime.bigint();
+
+    expect(isApiKey(hostile)).toBe(false);
+    expect(
+      Number(process.hrtime.bigint() - startedAt) / 1_000_000,
+    ).toBeLessThan(10);
   });
 
   it("validates provider-neutral device authorization contracts", () => {

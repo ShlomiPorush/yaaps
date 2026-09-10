@@ -4,6 +4,7 @@ import {
   createDraftQuerySchema,
   draftIdSchema,
   draftListQuerySchema,
+  isApiKey,
   paginationQuerySchema,
   updateDraftRequestSchema,
   type DraftSummary,
@@ -39,15 +40,17 @@ export class InvalidTtlError extends Error {
   }
 }
 
+const BEARER_SCHEME = "Bearer ";
+
 function bearerToken(request: FastifyRequest): string {
-  const authorization = request.headers.authorization;
-  const match = /^Bearer (yaaps_[A-Za-z0-9_-]+_[A-Za-z0-9_-]+)$/.exec(
-    authorization ?? "",
-  );
-  if (!match?.[1]) {
+  const authorization = request.headers.authorization ?? "";
+  const token = authorization.startsWith(BEARER_SCHEME)
+    ? authorization.slice(BEARER_SCHEME.length)
+    : "";
+  if (!isApiKey(token)) {
     throw new AuthenticationError();
   }
-  return match[1];
+  return token;
 }
 
 export function expiration(ttlSeconds: number): string {
