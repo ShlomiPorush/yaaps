@@ -170,7 +170,7 @@
     "limitsItems": [
       "Maximum HTML file size: 10 MB",
       "Default lifetime: 7 days",
-      "Allowed lifetime: 1 hour to 30 days",
+      "Allowed lifetime: 1 hour to 1 year",
       "Up to 100 results per page"
     ],
     "openApiAction": "Open the OpenAPI 3.1 spec",
@@ -234,6 +234,7 @@
     "extendDay": "1 day",
     "extendMonth": "30 days",
     "extendWeek": "7 days",
+    "extendYear": "1 year",
     "eyebrow": "Published by your agents",
     "heading": "My reports",
     "hideVersions": "Hide versions",

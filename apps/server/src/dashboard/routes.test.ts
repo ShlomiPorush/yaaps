@@ -322,10 +322,29 @@ describe("dashboard report management boundary", () => {
       Date.now() + requestedTtlSeconds * 1_000,
     );
 
+    const requestedYearSeconds = 365 * 24 * 60 * 60;
+    const beforeYearExtension = Date.now();
+    const extendedForAYear = await application.inject({
+      headers: browserHeaders(ownerCookies, true),
+      method: "PATCH",
+      payload: { ttlSeconds: requestedYearSeconds },
+      url: `/dashboard/api/drafts/${stored.draftId}`,
+    });
+    expect(extendedForAYear.statusCode).toBe(200);
+    const yearExpiry = Date.parse(
+      draftSummarySchema.parse(extendedForAYear.json()).expiresAt,
+    );
+    expect(yearExpiry).toBeGreaterThanOrEqual(
+      beforeYearExtension + requestedYearSeconds * 1_000,
+    );
+    expect(yearExpiry).toBeLessThanOrEqual(
+      Date.now() + requestedYearSeconds * 1_000,
+    );
+
     const invalidTtl = await application.inject({
       headers: browserHeaders(ownerCookies, true),
       method: "PATCH",
-      payload: { ttlSeconds: 365 * 24 * 60 * 60 },
+      payload: { ttlSeconds: 366 * 24 * 60 * 60 },
       url: `/dashboard/api/drafts/${stored.draftId}`,
     });
     expect(invalidTtl.statusCode).toBe(400);
@@ -351,6 +370,11 @@ describe("dashboard report management boundary", () => {
       .orderBy("id")
       .execute();
     expect(browserAudit).toEqual([
+      {
+        action: "draft.updated",
+        actor_api_key_id: null,
+        actor_user_id: ownerId,
+      },
       {
         action: "draft.updated",
         actor_api_key_id: null,

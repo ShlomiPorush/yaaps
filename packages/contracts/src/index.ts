@@ -6,7 +6,7 @@ export const FOUNDATION_VERSION = "1.7.2" as const;
 
 export const RETENTION_LIMITS_SECONDS = {
   default: 7 * 24 * 60 * 60,
-  maximum: 30 * 24 * 60 * 60,
+  maximum: 365 * 24 * 60 * 60,
   minimum: 60 * 60,
 } as const;
 

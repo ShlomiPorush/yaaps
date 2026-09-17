@@ -303,6 +303,7 @@ export function ManagementDashboard({
     { label: copy.management.extendDay, seconds: 24 * 60 * 60 },
     { label: copy.management.extendWeek, seconds: 7 * 24 * 60 * 60 },
     { label: copy.management.extendMonth, seconds: 30 * 24 * 60 * 60 },
+    { label: copy.management.extendYear, seconds: 365 * 24 * 60 * 60 },
   ].filter(
     (choice) =>
       !retentionLimits ||

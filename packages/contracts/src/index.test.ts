@@ -83,7 +83,7 @@ describe("public contracts", () => {
     expect(metadata.limits).toEqual({
       defaultTtlSeconds: 604_800,
       maximumHtmlBytes: 10_485_760,
-      maximumTtlSeconds: 2_592_000,
+      maximumTtlSeconds: 31_536_000,
       minimumTtlSeconds: 3_600,
     });
     expect(() =>
