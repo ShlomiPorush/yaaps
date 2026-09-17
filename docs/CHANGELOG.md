@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+## [1.8.0] - 2026-09-17
+
 ### Changed
 
 - Reports can now be kept for up to one year. The maximum retention rose from 30 days to 365 days, the dashboard extend menu gained a one-year preset alongside the existing ones, and an instance that sets `YAAPS_MAX_TTL_SECONDS` still overrides the default limit.
