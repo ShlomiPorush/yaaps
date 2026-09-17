@@ -21,13 +21,13 @@
     "@yaaps/contracts": "*",
     "better-sqlite3": "13.0.3",
     "css-tree": "3.2.1",
-    "fastify": "5.12.1",
+    "fastify": "5.12.3",
     "kysely": "0.29.5",
     "parse5": "8.0.1",
     "parse5-sax-parser": "8.0.0",
     "redoc": "2.5.3",
-    "swagger-ui-dist": "5.32.14",
-    "zod": "4.5.4"
+    "swagger-ui-dist": "5.32.15",
+    "zod": "4.6.1"
   },
   "devDependencies": {
     "@types/better-sqlite3": "9.6.0",
