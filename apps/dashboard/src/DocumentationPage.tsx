@@ -179,7 +179,7 @@ export YAAPS_API_KEY=yaaps_...`}
                 {`{
   "error": {
     "code": "INVALID_TTL",
-    "message": "TTL must be between 3600 and 2592000 seconds."
+    "message": "TTL must be between 3600 and 31536000 seconds."
   }
 }`}
               </CodeBlock>

@@ -606,6 +606,18 @@ describe("agent report API", () => {
     expect(invalidTtl.statusCode).toBe(400);
     expect(invalidTtl.json().error.code).toBe("INVALID_TTL");
 
+    const excessiveTtl = await application.inject({
+      headers: {
+        authorization: actor.authorization,
+        "content-type": "text/html",
+      },
+      method: "POST",
+      payload: html("<p>TTL</p>"),
+      url: `/api/drafts?ttlSeconds=${366 * 24 * 60 * 60}`,
+    });
+    expect(excessiveTtl.statusCode).toBe(400);
+    expect(excessiveTtl.json().error.code).toBe("INVALID_TTL");
+
     const oversized = await application.inject({
       headers: {
         authorization: actor.authorization,

@@ -12,7 +12,7 @@ describe("server authentication configuration", () => {
       publicOrigin: "http://localhost:3000",
       retention: {
         defaultTtlSeconds: 604_800,
-        maximumTtlSeconds: 2_592_000,
+        maximumTtlSeconds: 31_536_000,
         minimumTtlSeconds: 3_600,
       },
       rpId: "localhost",

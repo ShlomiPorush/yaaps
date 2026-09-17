@@ -53,7 +53,7 @@ const serviceMetadata = {
   limits: {
     defaultTtlSeconds: 7 * 24 * 60 * 60,
     maximumHtmlBytes: 10 * 1024 * 1024,
-    maximumTtlSeconds: 30 * 24 * 60 * 60,
+    maximumTtlSeconds: 365 * 24 * 60 * 60,
     minimumTtlSeconds: 60 * 60,
   },
 };
@@ -455,6 +455,54 @@ describe("signed-in management dashboard", () => {
         name: localeDocuments.en.management.extend,
       }),
     ).toBeInTheDocument();
+  });
+
+  it("offers a one-year extension preset within the instance retention limits", async () => {
+    document.cookie = "yaaps_csrf=csrf-token; Path=/";
+    const extendedExpiry = new Date(
+      Date.now() + 365 * 24 * 60 * 60 * 1_000,
+    ).toISOString();
+    const fetchImplementation = vi.fn<typeof fetch>(async (input, init) => {
+      const url = String(input);
+      if (url.startsWith("/dashboard/api/drafts?") && !init?.method) {
+        return json({ items: [draft], limit: 100, offset: 0, total: 1 });
+      }
+      if (url === "/auth/api-keys") return json({ items: [] });
+      if (url === "/dashboard/api/categories") return json({ items: [] });
+      if (url === "/api/meta") return json(serviceMetadata);
+      if (url.endsWith(draft.id) && init?.method === "PATCH") {
+        return json({ ...draft, expiresAt: extendedExpiry });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    const { container } = renderDashboard(fetchImplementation, "reports");
+
+    await screen.findByText(draft.title);
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: localeDocuments.en.management.extend,
+      }),
+    );
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: localeDocuments.en.management.extendYear,
+      }),
+    );
+
+    await waitFor(() =>
+      expect(fetchImplementation).toHaveBeenCalledWith(
+        `/dashboard/api/drafts/${draft.id}`,
+        expect.objectContaining({
+          body: JSON.stringify({ ttlSeconds: 365 * 24 * 60 * 60 }),
+          headers: expect.objectContaining({ "x-csrf-token": "csrf-token" }),
+          method: "PATCH",
+        }),
+      ),
+    );
+    await waitFor(() => {
+      const meta = container.querySelector(".draft-meta");
+      expect(meta?.textContent).toContain(formatDeviceDate(extendedExpiry));
+    });
   });
 
   it("requires a second explicit action before permanently deleting a report", async () => {
