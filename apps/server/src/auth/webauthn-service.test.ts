@@ -45,8 +45,13 @@ interface CapturedVerifyOptions {
   requireUserVerification: unknown;
 }
 
+// EdDSA, ES256, and RS256: the algorithms offered before the library began
+// preferring ML-DSA-44 by default.
+const EXPECTED_ALGORITHM_IDS = [-8, -7, -257];
+
 function fakeWebAuthn(
   captured?: CapturedVerifyOptions[],
+  capturedAlgorithms?: unknown[],
 ): WebAuthnImplementation {
   let registrationNumber = 0;
   let currentRegistrationChallenge = "";
@@ -57,6 +62,7 @@ function fakeWebAuthn(
       userVerification: "required",
     })) as WebAuthnImplementation["generateAuthenticationOptions"],
     generateRegistrationOptions: (async (options) => {
+      capturedAlgorithms?.push(options.supportedAlgorithmIDs);
       registrationNumber += 1;
       currentRegistrationChallenge = `registration-challenge${
         registrationNumber === 1 ? "" : `-${registrationNumber}`
@@ -92,6 +98,7 @@ function fakeWebAuthn(
       };
     }) as WebAuthnImplementation["verifyAuthenticationResponse"],
     verifyRegistrationResponse: (async (options) => {
+      capturedAlgorithms?.push(options.supportedAlgorithmIDs);
       captured?.push({
         expectedOrigin: options.expectedOrigin,
         expectedRPID: options.expectedRPID,
@@ -181,6 +188,41 @@ describe("WebAuthn service", () => {
         expectedRPID: "share.yaaps.net",
         requireUserVerification: true,
       });
+    }
+  });
+
+  it("offers and accepts only the pinned passkey algorithms in every registration ceremony", async () => {
+    const capturedAlgorithms: unknown[] = [];
+    const capturingService = new WebAuthnService(
+      repository,
+      {
+        bootstrapSecret: "bootstrap-secret-that-is-at-least-32-characters",
+        origin: "https://share.yaaps.net",
+        rpId: "share.yaaps.net",
+      },
+      fakeWebAuthn(undefined, capturedAlgorithms),
+    );
+    await capturingService.beginBootstrap(
+      "bootstrap-secret-that-is-at-least-32-characters",
+      "Admin",
+    );
+    const administrator = await capturingService.completeRegistration(
+      "bootstrap",
+      registrationResponse,
+    );
+    await capturingService.beginAdditionalPasskey(administrator.userId);
+    const secondCredentialId =
+      Buffer.from("second-credential").toString("base64url");
+    await capturingService.completeAdditionalPasskey(administrator.userId, {
+      ...registrationResponse,
+      id: secondCredentialId,
+      rawId: secondCredentialId,
+    });
+
+    // Two option generations and two verifications.
+    expect(capturedAlgorithms).toHaveLength(4);
+    for (const algorithms of capturedAlgorithms) {
+      expect(algorithms).toEqual(EXPECTED_ALGORITHM_IDS);
     }
   });
 
