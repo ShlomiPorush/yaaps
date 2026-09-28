@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+## [1.8.1] - 2026-09-28
+
+### Changed
+
+- Updated runtime dependencies to React 19.3.0, Zod 4.6.5, Fastify 5.12.5, `@fastify/static` 10.1.4, Kysely 0.29.6, Redoc 2.5.4, and Swagger UI 5.33.0.
+- Refreshed development dependencies, including Vitest 5, Playwright 1.63, Vite 8.3, ESLint 10.11, and Prettier 3.9.8.
+
 ## [1.8.0] - 2026-09-17
 
 ### Changed
