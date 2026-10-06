@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Fixed
+
+- Updated transitive dependencies to resolve published advisories in `fast-uri`, `brace-expansion`, `ip-address`, `source-map-js`, and `dompurify`.
+
 ## [1.8.1] - 2026-09-28
 
 ### Changed
