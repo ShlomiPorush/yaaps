@@ -6,11 +6,11 @@ import {
   verifyAuthenticationResponse,
   verifyRegistrationResponse,
   type AuthenticationResponseJSON,
-  type AuthenticatorTransportFuture,
   type PublicKeyCredentialCreationOptionsJSON,
   type PublicKeyCredentialRequestOptionsJSON,
   type RegistrationResponseJSON,
 } from "@simplewebauthn/server";
+import { COSEALG } from "@simplewebauthn/server/helpers";
 
 import {
   AuthenticationConflictError,
@@ -22,6 +22,16 @@ import {
 import { hashSecret, secretMatchesHash } from "./secrets.js";
 
 const SESSION_LIFETIME_SECONDS = 8 * 60 * 60;
+
+// Passkey public key algorithms offered at registration and accepted when
+// verifying it. Pinned so library defaults cannot change them silently; the
+// library would otherwise prefer ML-DSA-44, which Node 24 only offers as an
+// experimental Web Crypto algorithm.
+const SUPPORTED_ALGORITHM_IDS: number[] = [
+  COSEALG.EdDSA,
+  COSEALG.ES256,
+  COSEALG.RS256,
+];
 
 export interface WebAuthnServiceConfiguration {
   bootstrapSecret?: string;
@@ -132,6 +142,7 @@ export class WebAuthnService {
         expectedRPID: this.configuration.rpId,
         requireUserVerification: true,
         response,
+        supportedAlgorithmIDs: SUPPORTED_ALGORITHM_IDS,
       });
     } catch {
       throw new AuthenticationError();
@@ -212,10 +223,11 @@ export class WebAuthnService {
       },
       excludeCredentials: user.passkeys.map((passkey) => ({
         id: passkey.credentialId,
-        transports: passkey.transports as AuthenticatorTransportFuture[],
+        transports: passkey.transports,
       })),
       rpID: this.configuration.rpId,
       rpName: "YAAPS",
+      supportedAlgorithmIDs: SUPPORTED_ALGORITHM_IDS,
       userDisplayName: user.displayName,
       userID: new Uint8Array(user.webauthnUserId),
       userName: user.displayName,
@@ -259,7 +271,7 @@ export class WebAuthnService {
           counter: passkey.counter,
           id: passkey.credentialId,
           publicKey: new Uint8Array(passkey.publicKey),
-          transports: passkey.transports as AuthenticatorTransportFuture[],
+          transports: passkey.transports,
         },
         expectedChallenge: async (challenge) => {
           try {
@@ -322,6 +334,7 @@ export class WebAuthnService {
       },
       rpID: this.configuration.rpId,
       rpName: "YAAPS",
+      supportedAlgorithmIDs: SUPPORTED_ALGORITHM_IDS,
       userDisplayName: displayName,
       userID: webauthnUserId,
       userName: displayName,

@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Changed
+
+- Updated SimpleWebAuthn to server 14.0.3 and browser 14.0.0. Passkey registration still offers and accepts only EdDSA, ES256, and RS256 keys instead of the library's new ML-DSA-44 default, so registration behavior is unchanged and the server does not trigger Node.js experimental post-quantum warnings.
+
 ### Fixed
 
 - Updated transitive dependencies to resolve published advisories in `fast-uri`, `brace-expansion`, `ip-address`, `source-map-js`, and `dompurify`.
