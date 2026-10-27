@@ -21,7 +21,7 @@
     "@yaaps/contracts": "*",
     "better-sqlite3": "13.0.3",
     "css-tree": "3.2.1",
-    "fastify": "5.12.5",
+    "fastify": "5.12.6",
     "kysely": "0.29.6",
     "parse5": "8.0.1",
     "parse5-sax-parser": "8.0.0",
