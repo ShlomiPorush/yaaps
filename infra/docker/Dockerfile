@@ -1,4 +1,4 @@
-FROM node:24.17.0-alpine@sha256:156b55f92e98ccd5ef49578a8cea0df4679826564bad1c9d4ef04462b9f0ded6 AS build
+FROM node:24.22.1-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS build
 
 WORKDIR /app
 
@@ -21,7 +21,7 @@ COPY plugins/yaaps/distribution/build-skill-distribution.mjs plugins/yaaps/distr
 
 RUN npm run build && npm prune --omit=dev
 
-FROM node:24.17.0-alpine@sha256:156b55f92e98ccd5ef49578a8cea0df4679826564bad1c9d4ef04462b9f0ded6 AS runtime
+FROM node:24.22.1-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS runtime
 
 ENV NODE_ENV=production \
     YAAPS_DASHBOARD_DIR=/app/apps/dashboard/dist \
