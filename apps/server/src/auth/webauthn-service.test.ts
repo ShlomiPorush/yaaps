@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -15,6 +16,7 @@ import {
 } from "./webauthn-service.js";
 import { openDatabase, type YaapsDatabase } from "../storage/database.js";
 
+const bootstrapSecret = randomBytes(32).toString("base64url");
 const credentialId = Buffer.from("test-credential").toString("base64url");
 const registrationResponse = {
   clientExtensionResults: {},
@@ -146,7 +148,7 @@ describe("WebAuthn service", () => {
     service = new WebAuthnService(
       repository,
       {
-        bootstrapSecret: "bootstrap-secret-that-is-at-least-32-characters",
+        bootstrapSecret: bootstrapSecret,
         origin: "https://share.yaaps.net",
         rpId: "share.yaaps.net",
       },
@@ -164,16 +166,13 @@ describe("WebAuthn service", () => {
     const capturingService = new WebAuthnService(
       repository,
       {
-        bootstrapSecret: "bootstrap-secret-that-is-at-least-32-characters",
+        bootstrapSecret: bootstrapSecret,
         origin: "https://share.yaaps.net",
         rpId: "share.yaaps.net",
       },
       fakeWebAuthn(captured),
     );
-    await capturingService.beginBootstrap(
-      "bootstrap-secret-that-is-at-least-32-characters",
-      "Admin",
-    );
+    await capturingService.beginBootstrap(bootstrapSecret, "Admin");
     await capturingService.completeRegistration(
       "bootstrap",
       registrationResponse,
@@ -196,16 +195,13 @@ describe("WebAuthn service", () => {
     const capturingService = new WebAuthnService(
       repository,
       {
-        bootstrapSecret: "bootstrap-secret-that-is-at-least-32-characters",
+        bootstrapSecret: bootstrapSecret,
         origin: "https://share.yaaps.net",
         rpId: "share.yaaps.net",
       },
       fakeWebAuthn(undefined, capturedAlgorithms),
     );
-    await capturingService.beginBootstrap(
-      "bootstrap-secret-that-is-at-least-32-characters",
-      "Admin",
-    );
+    await capturingService.beginBootstrap(bootstrapSecret, "Admin");
     const administrator = await capturingService.completeRegistration(
       "bootstrap",
       registrationResponse,
@@ -262,10 +258,7 @@ describe("WebAuthn service", () => {
       service.beginBootstrap("wrong-secret", "Admin"),
     ).rejects.toBeInstanceOf(AuthenticationError);
     await expect(
-      service.beginBootstrap(
-        "bootstrap-secret-that-is-at-least-32-characters",
-        "Admin",
-      ),
+      service.beginBootstrap(bootstrapSecret, "Admin"),
     ).resolves.toMatchObject({ challenge: "registration-challenge" });
 
     const completed = await service.completeRegistration(
@@ -278,18 +271,12 @@ describe("WebAuthn service", () => {
       repository.authenticateSession(completed.sessionToken),
     ).resolves.toMatchObject({ userId: completed.userId });
     await expect(
-      service.beginBootstrap(
-        "bootstrap-secret-that-is-at-least-32-characters",
-        "Another admin",
-      ),
+      service.beginBootstrap(bootstrapSecret, "Another admin"),
     ).rejects.toThrow("Bootstrap has already been completed.");
   });
 
   it("authenticates with a stored credential and rejects assertion replay", async () => {
-    await service.beginBootstrap(
-      "bootstrap-secret-that-is-at-least-32-characters",
-      "Admin",
-    );
+    await service.beginBootstrap(bootstrapSecret, "Admin");
     await service.completeRegistration("bootstrap", registrationResponse);
     await expect(service.beginAuthentication()).resolves.toMatchObject({
       challenge: "authentication-challenge",
@@ -328,10 +315,7 @@ describe("WebAuthn service", () => {
   });
 
   it("adds a second passkey only to the authenticated user", async () => {
-    await service.beginBootstrap(
-      "bootstrap-secret-that-is-at-least-32-characters",
-      "Admin",
-    );
+    await service.beginBootstrap(bootstrapSecret, "Admin");
     const administrator = await service.completeRegistration(
       "bootstrap",
       registrationResponse,

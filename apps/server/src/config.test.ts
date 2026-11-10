@@ -1,8 +1,11 @@
+import { randomBytes } from "node:crypto";
 import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
 import { loadConfiguration } from "./config.js";
+
+const bootstrapSecret = randomBytes(32).toString("base64url");
 
 describe("server authentication configuration", () => {
   it("uses safe localhost defaults", () => {
@@ -66,11 +69,11 @@ describe("server authentication configuration", () => {
   it("derives production cookie and RP settings from the final origin", () => {
     expect(
       loadConfiguration({
-        YAAPS_BOOTSTRAP_SECRET: "a".repeat(32),
+        YAAPS_BOOTSTRAP_SECRET: bootstrapSecret,
         YAAPS_PUBLIC_ORIGIN: "https://share.yaaps.net",
       }),
     ).toMatchObject({
-      bootstrapSecret: "a".repeat(32),
+      bootstrapSecret: bootstrapSecret,
       publicOrigin: "https://share.yaaps.net",
       rpId: "share.yaaps.net",
       secureCookies: true,

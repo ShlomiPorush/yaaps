@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -17,9 +17,12 @@ export default async function globalSetup(_config: FullConfig) {
   const securityDirectory = await mkdtemp(
     path.join(tmpdir(), "yaaps-e2e-security-"),
   );
+  // A one-time bootstrap secret per run; the spec reads it from the environment.
+  const bootstrapSecret = randomBytes(32).toString("base64url");
+  process.env.YAAPS_E2E_BOOTSTRAP_SECRET = bootstrapSecret;
   const main = await buildApplication({
     authentication: {
-      bootstrapSecret: "yaaps-playwright-bootstrap-secret-2026",
+      bootstrapSecret,
       origin: MAIN_ORIGIN,
       rpId: "localhost",
       secureCookies: false,
@@ -150,6 +153,7 @@ export default async function globalSetup(_config: FullConfig) {
     await main.listen({ host: "127.0.0.1", port: 4173 });
     await security.listen({ host: "127.0.0.1", port: 4174 });
   } catch (error) {
+    delete process.env.YAAPS_E2E_BOOTSTRAP_SECRET;
     await Promise.allSettled([main.close(), security.close()]);
     await Promise.allSettled([
       rm(mainDirectory, { force: true, recursive: true }),
@@ -159,6 +163,7 @@ export default async function globalSetup(_config: FullConfig) {
   }
 
   return async () => {
+    delete process.env.YAAPS_E2E_BOOTSTRAP_SECRET;
     await Promise.all([main.close(), security.close()]);
     await Promise.all([
       rm(mainDirectory, { force: true, recursive: true }),

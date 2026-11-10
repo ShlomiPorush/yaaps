@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Changed
+
+- Test suites now generate a one-time bootstrap secret for each run instead of using fixed values committed to the repository.
+
 ### Fixed
 
 - Updated Zod to 4.6.6, Fastify to 5.12.8, and Swagger UI to 5.34.1 to resolve published advisories. The Swagger UI page at `/docs` now serves DOMPurify 3.4.17.
