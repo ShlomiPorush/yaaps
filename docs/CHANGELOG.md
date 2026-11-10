@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Fixed
+
+- Updated Zod to 4.6.6, Fastify to 5.12.8, and Swagger UI to 5.34.1 to resolve published advisories. The Swagger UI page at `/docs` now serves DOMPurify 3.4.17.
+- Updated transitive `undici`, `dompurify`, `fast-uri`, and `ip-address` to patched releases, and the development dependency Vite to 8.3.3, so `npm audit --audit-level=high` passes.
+
 ## [1.8.2] - 2026-10-07
 
 ### Changed
