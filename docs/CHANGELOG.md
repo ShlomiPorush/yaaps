@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+## [1.8.4] - 2026-11-10
+
 ### Changed
 
 - The server image and CI now run Node.js 24.22.2, which includes the Node.js 24.22.1 security fixes.
