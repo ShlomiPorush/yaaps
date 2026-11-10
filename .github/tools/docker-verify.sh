@@ -60,6 +60,18 @@ invoke_docker_verification() {
     printf 'Running image %s does not match built image %s.\n' "$running_image" "$expected_image" >&2
     return 1
   }
+  # The runtime image serves the API reference bundle copied into dist at build time.
+  local reference_page reference_bundle
+  reference_page="$(curl --silent --show-error --fail --max-time 5 "http://127.0.0.1:$port/docs/reference")"
+  [[ "$reference_page" == *scalar-api-reference.js* ]] || {
+    printf 'The API reference page is missing from the runtime image.\n' >&2
+    return 1
+  }
+  reference_bundle="$(curl --silent --show-error --fail --max-time 10 "http://127.0.0.1:$port/docs/assets/scalar-api-reference.js")"
+  [[ "$reference_bundle" == *createApiReference* ]] || {
+    printf 'The API reference bundle is missing from the runtime image.\n' >&2
+    return 1
+  }
   printf 'Docker verification passed on port %s (%s).\n' "$port" "$running_image"
   cleanup_docker_verification
   trap - EXIT

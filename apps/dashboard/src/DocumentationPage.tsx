@@ -52,22 +52,13 @@ export function DocumentationPage({ copy }: DocumentationPageProps) {
           <p className="intro">{copy.docs.intro}</p>
         </div>
         <div className="api-docs-links">
-          <a className="openapi-card" href="/docs/swagger">
+          <a className="openapi-card" href="/docs/reference">
             <span className="openapi-mark" aria-hidden="true">
-              SW
+              API
             </span>
             <span>
-              <strong>{copy.docs.swaggerAction}</strong>
-              <small>{copy.docs.swaggerText}</small>
-            </span>
-          </a>
-          <a className="openapi-card" href="/docs/redoc">
-            <span className="openapi-mark" aria-hidden="true">
-              RD
-            </span>
-            <span>
-              <strong>{copy.docs.redocAction}</strong>
-              <small>{copy.docs.redocText}</small>
+              <strong>{copy.docs.referenceAction}</strong>
+              <small>{copy.docs.referenceText}</small>
             </span>
           </a>
           <a className="openapi-card" href="/openapi.json">
