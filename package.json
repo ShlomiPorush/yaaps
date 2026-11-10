@@ -1,6 +1,6 @@
 {
   "name": "yaaps-workspace",
-  "version": "1.8.2",
+  "version": "1.8.3",
   "private": true,
   "description": "Self-hosted HTML report publishing for agents.",
   "license": "MIT",
