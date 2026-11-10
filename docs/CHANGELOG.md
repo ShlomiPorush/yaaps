@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 
 - Test suites now generate a one-time bootstrap secret for each run instead of using fixed values committed to the repository.
+- The API reference at `/docs/reference` now uses Scalar instead of Swagger UI and ReDoc. It still loads only from the YAAPS server, and the old `/docs/swagger` and `/docs/redoc` addresses redirect to it. The runtime image no longer includes the Redoc bundle, which shipped an outdated DOMPurify.
 
 ### Fixed
 

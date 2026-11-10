@@ -6,7 +6,7 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && node ../../plugins/yaaps/distribution/build-skill-distribution.mjs",
+    "build": "tsc -p tsconfig.build.json && node scripts/copy-api-reference.mjs && node ../../plugins/yaaps/distribution/build-skill-distribution.mjs",
     "dev": "tsx watch src/index.ts",
     "pretypecheck": "npm run build --workspace @yaaps/contracts",
     "start": "node dist/index.js",
@@ -25,11 +25,10 @@
     "kysely": "0.29.6",
     "parse5": "8.0.1",
     "parse5-sax-parser": "8.0.0",
-    "redoc": "2.5.4",
-    "swagger-ui-dist": "5.34.1",
     "zod": "4.6.6"
   },
   "devDependencies": {
+    "@scalar/api-reference": "1.76.4",
     "@types/better-sqlite3": "9.6.0",
     "@types/css-tree": "3.2.0",
     "tsx": "4.23.15"

@@ -280,6 +280,12 @@ test("presents the product and API documentation across locales and viewports", 
       externalRequests.push(request.url());
     }
   });
+  const policyViolations: string[] = [];
+  page.on("console", (message) => {
+    if (message.text().includes("Content Security Policy")) {
+      policyViolations.push(message.text());
+    }
+  });
   await page.goto("/");
   await expect(
     page.getByRole("heading", { name: english.dashboard.heading }),
@@ -439,13 +445,37 @@ test("presents the product and API documentation across locales and viewports", 
   );
 
   await page.setViewportSize({ height: 900, width: 1280 });
-  await page.goto("/docs/swagger");
-  await expect(page.locator(".swagger-ui .info .title")).toContainText(
-    "YAAPS API",
+  await page.goto("/docs/reference");
+  // Scope to the Scalar container: the page shell also says "YAAPS API".
+  const reference = page.locator("#yaaps-api-reference");
+  await expect(
+    reference.getByRole("heading", { level: 1, name: "YAAPS API" }),
+  ).toBeVisible();
+  await expect(
+    reference.getByRole("heading", { name: "Check process health" }),
+  ).toBeVisible();
+  await reference
+    .getByRole("button", { name: /Test Request.*get \/healthz/iu })
+    .click();
+  const client = page.getByRole("dialog");
+  const healthResponse = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === "/healthz",
   );
-  await page.goto("/docs/redoc");
-  await expect(page.locator("#redoc-container h1")).toContainText("YAAPS API");
+  await client
+    .getByRole("button", { name: /Send get request to .*\/healthz/u })
+    .click();
+  expect((await healthResponse).status()).toBe(200);
+  await expect(client.getByText("200 OK")).toBeVisible();
+  // The hosted Scalar client opens outside YAAPS, so no control may link to it.
+  await expect(page.getByText("Open API Client")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(client).toBeHidden();
+  for (const retiredPath of ["/docs/swagger", "/docs/redoc"]) {
+    await page.goto(retiredPath);
+    await expect(page).toHaveURL(/\/docs\/reference$/u);
+  }
   expect(externalRequests).toEqual([]);
+  expect(policyViolations).toEqual([]);
 });
 
 test("completes the browser product lifecycle with real WebAuthn ceremonies", async ({

@@ -114,93 +114,68 @@ describe("foundation server", () => {
     await application.close();
   });
 
-  it("serves Swagger UI and ReDoc entirely from local assets", async () => {
+  it("serves the Scalar API reference entirely from local assets", async () => {
     const application = await buildApplication({
       dataDirectory: await temporaryDirectory(),
     });
-    const pages = [
-      {
-        assets: [
-          "/docs/assets/shell.css",
-          "/docs/assets/swagger-ui.css",
-          "/docs/assets/swagger-ui-bundle.js",
-          "/docs/assets/swagger-initializer.js",
-        ],
-        renderer: "Swagger UI",
-        url: "/docs/swagger",
-      },
-      {
-        assets: [
-          "/docs/assets/shell.css",
-          "/docs/assets/redoc.standalone.js",
-          "/docs/assets/redoc-initializer.js",
-        ],
-        renderer: "ReDoc",
-        url: "/docs/redoc",
-      },
-    ];
 
-    for (const page of pages) {
-      const response = await application.inject({
-        method: "GET",
-        url: page.url,
-      });
+    const response = await application.inject({
+      method: "GET",
+      url: "/docs/reference",
+    });
 
-      expect(response.statusCode).toBe(200);
-      expect(response.headers["content-type"]).toContain("text/html");
-      expect(response.headers["cache-control"]).toBe("no-store");
-      expect(response.headers["content-security-policy"]).toContain(
-        "script-src 'self'",
-      );
-      expect(response.headers["content-security-policy"]).toContain(
-        "script-src-attr 'none'",
-      );
-      expect(response.headers["content-security-policy"]).toContain(
-        "style-src 'self' 'unsafe-inline'",
-      );
-      expect(response.body).toContain(page.renderer);
-      expect(response.body).not.toMatch(/(?:https?:)?\/\//u);
-      expect(response.body).not.toMatch(/<script(?![^>]*\ssrc=)/u);
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["content-type"]).toContain("text/html");
+    expect(response.headers["cache-control"]).toBe("no-store");
+    const csp = response.headers["content-security-policy"];
+    expect(csp).toContain("script-src 'self'");
+    expect(csp).toContain("script-src-attr 'none'");
+    expect(csp).toContain("connect-src 'self'");
+    expect(csp).toContain("font-src 'self'");
+    expect(csp).toContain("style-src 'self' 'unsafe-inline'");
+    expect(response.body).not.toMatch(/(?:https?:)?\/\//u);
+    expect(response.body).not.toMatch(/<script(?![^>]*\ssrc=)/u);
+    // Scalar auto-mounts a second, default-configured instance on this id.
+    expect(response.body).not.toContain('id="api-reference"');
 
-      for (const assetUrl of page.assets) {
-        expect(response.body).toContain(assetUrl);
-        const asset = await application.inject({
-          method: "GET",
-          url: assetUrl,
-        });
-        expect(asset.statusCode).toBe(200);
-        expect(asset.body.length).toBeGreaterThan(20);
-      }
+    for (const assetUrl of [
+      "/docs/assets/shell.css",
+      "/docs/assets/scalar-api-reference.js",
+      "/docs/assets/scalar-initializer.js",
+    ]) {
+      expect(response.body).toContain(assetUrl);
+      const asset = await application.inject({ method: "GET", url: assetUrl });
+      expect(asset.statusCode).toBe(200);
+      expect(asset.body.length).toBeGreaterThan(20);
     }
 
-    const swaggerInitializer = await application.inject({
+    const bundle = await application.inject({
       method: "GET",
-      url: "/docs/assets/swagger-initializer.js",
+      url: "/docs/assets/scalar-api-reference.js",
     });
-    const redocInitializer = await application.inject({
-      method: "GET",
-      url: "/docs/assets/redoc-initializer.js",
-    });
-    const redocBundle = await application.inject({
-      method: "GET",
-      url: "/docs/assets/redoc.standalone.js",
-    });
-    const redocLogo = await application.inject({
-      method: "GET",
-      url: "/docs/assets/redoc-logo.svg",
-    });
+    expect(bundle.headers["content-type"]).toContain("text/javascript");
+    expect(bundle.body).toContain("createApiReference");
 
-    expect(swaggerInitializer.body).toContain('url: "/openapi.json"');
-    expect(swaggerInitializer.body).toContain("persistAuthorization: false");
-    expect(redocInitializer.body).toContain('Redoc.init("/openapi.json"');
-    expect(redocBundle.body).toContain("/docs/assets/redoc-logo.svg");
-    expect(redocBundle.body).not.toContain(
-      "https://cdn.redoc.ly/redoc/logo-mini.svg",
-    );
-    expect(redocLogo.statusCode).toBe(200);
-    expect(redocLogo.headers["content-type"]).toContain("image/svg+xml");
-    expect(swaggerInitializer.body).not.toMatch(/(?:https?:)?\/\//u);
-    expect(redocInitializer.body).not.toMatch(/(?:https?:)?\/\//u);
+    const initializer = await application.inject({
+      method: "GET",
+      url: "/docs/assets/scalar-initializer.js",
+    });
+    expect(initializer.body).toContain('url: "/openapi.json"');
+    expect(initializer.body).toContain("withDefaultFonts: false");
+    expect(initializer.body).toContain("telemetry: false");
+    expect(initializer.body).toContain("agent: { disabled: true }");
+    expect(initializer.body).toContain("persistAuth: false");
+    expect(initializer.body).toContain("hideClientButton: true");
+    expect(initializer.body).not.toMatch(/(?:https?:)?\/\//u);
+
+    for (const retiredUrl of ["/docs/swagger", "/docs/redoc"]) {
+      const retired = await application.inject({
+        method: "GET",
+        url: retiredUrl,
+      });
+      expect(retired.statusCode).toBe(301);
+      expect(retired.headers.location).toBe("/docs/reference");
+    }
 
     const ordinaryRoute = await application.inject({
       method: "GET",

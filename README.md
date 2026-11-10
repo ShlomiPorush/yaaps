@@ -48,7 +48,7 @@ See the [CLI reference](packages/cli/README.md) for all commands.
 - Owner-scoped reports with immutable versions, expiry controls, and public capability URLs.
 - Publisher-selected report isolation: keep a version fully self-contained, or allow HTTPS presentation assets while scripts, forms, frames, plugins, and programmatic network requests stay blocked.
 - English and Hebrew interfaces with LTR, RTL, light, dark, desktop, and mobile support.
-- HTTP API with OpenAPI 3.1, Swagger UI, and ReDoc documentation.
+- HTTP API with OpenAPI 3.1 and an interactive Scalar API reference.
 - SQLite metadata, immutable HTML storage, retention cleanup, and verified backup and restore operations.
 
 ## Self-hosting

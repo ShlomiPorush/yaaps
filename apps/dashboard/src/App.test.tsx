@@ -59,14 +59,9 @@ describe("dashboard foundation", () => {
     ).toHaveAttribute("href", "/openapi.json");
     expect(
       screen.getByRole("link", {
-        name: new RegExp(localeDocuments.en.docs.swaggerAction, "u"),
+        name: new RegExp(localeDocuments.en.docs.referenceAction, "u"),
       }),
-    ).toHaveAttribute("href", "/docs/swagger");
-    expect(
-      screen.getByRole("link", {
-        name: new RegExp(localeDocuments.en.docs.redocAction, "u"),
-      }),
-    ).toHaveAttribute("href", "/docs/redoc");
+    ).toHaveAttribute("href", "/docs/reference");
     const footer = screen.getByRole("contentinfo");
     const githubLink = within(footer).getByRole("link", { name: "GitHub" });
     expect(githubLink).toHaveAttribute(
@@ -103,14 +98,9 @@ describe("dashboard foundation", () => {
     ).toBeVisible();
     expect(
       screen.getByRole("link", {
-        name: new RegExp(localeDocuments.he.docs.swaggerAction, "u"),
+        name: new RegExp(localeDocuments.he.docs.referenceAction, "u"),
       }),
-    ).toHaveAttribute("href", "/docs/swagger");
-    expect(
-      screen.getByRole("link", {
-        name: new RegExp(localeDocuments.he.docs.redocAction, "u"),
-      }),
-    ).toHaveAttribute("href", "/docs/redoc");
+    ).toHaveAttribute("href", "/docs/reference");
     expect(document.documentElement).toHaveAttribute("dir", "rtl");
   });
 

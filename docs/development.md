@@ -32,7 +32,7 @@ node apps/server/dist/index.js
 
 The dashboard is served from the same process at `http://127.0.0.1:9099`. On first run, open `/login` and use the bootstrap secret to register the first administrator passkey; remove `YAAPS_BOOTSTRAP_SECRET` from the environment afterwards. All configuration is read from `YAAPS_*` variables with localhost defaults (see `apps/server/src/config.ts`).
 
-When YAAPS is running, the HTTP API is documented at `/docs`, `/docs/swagger`, `/docs/redoc`, and `/openapi.json`.
+When YAAPS is running, the HTTP API is documented at `/docs`, `/docs/reference`, and `/openapi.json`.
 
 ## Verification
 
