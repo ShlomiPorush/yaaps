@@ -13,19 +13,19 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@fastify/cookie": "11.1.2",
-    "@fastify/helmet": "13.1.1",
-    "@fastify/rate-limit": "11.2.0",
-    "@fastify/static": "10.1.5",
+    "@fastify/cookie": "11.1.5",
+    "@fastify/helmet": "13.2.0",
+    "@fastify/rate-limit": "11.2.2",
+    "@fastify/static": "10.1.8",
     "@simplewebauthn/server": "14.0.3",
     "@yaaps/contracts": "*",
     "better-sqlite3": "13.0.3",
     "css-tree": "3.2.1",
     "fastify": "5.12.8",
-    "kysely": "0.29.6",
-    "parse5": "8.0.1",
+    "kysely": "0.29.8",
+    "parse5": "8.1.0",
     "parse5-sax-parser": "8.0.0",
-    "zod": "4.6.6"
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@scalar/api-reference": "1.76.4",
