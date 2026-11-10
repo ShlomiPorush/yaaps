@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Changed
+
+- The server image and CI now run Node.js 24.22.2, which includes the Node.js 24.22.1 security fixes.
+- Updated runtime dependencies to Zod 4.6.7, React 19.3.1, `@fastify/cookie` 11.1.5, `@fastify/helmet` 13.2.0, `@fastify/rate-limit` 11.2.2, `@fastify/static` 10.1.8, Kysely 0.29.8, and parse5 8.1.0, and refreshed development dependencies, including Playwright 1.64.1, Vitest 5.1.0, Vite 8.3.5, ESLint 10.14.0, and Prettier 3.9.10.
+
 ## [1.8.3] - 2026-11-10
 
 ### Changed
