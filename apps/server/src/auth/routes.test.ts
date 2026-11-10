@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { buildApplication } from "../app.js";
 
+const bootstrapSecret = randomBytes(32).toString("base64url");
 const temporaryPaths: string[] = [];
 
 async function temporaryDirectory(): Promise<string> {
@@ -183,7 +184,7 @@ describe("authentication HTTP boundary", () => {
   it("protects one-time bootstrap options with the configured secret", async () => {
     const application = await buildApplication({
       authentication: {
-        bootstrapSecret: "bootstrap-secret-that-is-at-least-32-characters",
+        bootstrapSecret: bootstrapSecret,
         origin: "https://share.yaaps.net",
         rpId: "share.yaaps.net",
         secureCookies: true,
@@ -200,7 +201,7 @@ describe("authentication HTTP boundary", () => {
       method: "POST",
       payload: {
         displayName: "Admin",
-        secret: "bootstrap-secret-that-is-at-least-32-characters",
+        secret: bootstrapSecret,
       },
       url: "/auth/bootstrap/options",
     });

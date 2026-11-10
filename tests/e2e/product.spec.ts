@@ -13,10 +13,20 @@ import {
   type Route,
 } from "@playwright/test";
 
-const BOOTSTRAP_SECRET = "yaaps-playwright-bootstrap-secret-2026";
 const SECURITY_REPORT_URL = `http://localhost:4174/d/${"S".repeat(16)}`;
 const CONNECTED_REPORT_URL = `http://localhost:4174/d/${"C".repeat(32)}`;
 const execFileAsync = promisify(execFile);
+
+// Global setup generates a one-time secret per run; read it only inside tests.
+function e2eBootstrapSecret(): string {
+  const secret = process.env.YAAPS_E2E_BOOTSTRAP_SECRET;
+  if (!secret) {
+    throw new Error(
+      "YAAPS_E2E_BOOTSTRAP_SECRET is missing; run the suite through the Playwright config so global setup creates it.",
+    );
+  }
+  return secret;
+}
 const bashExecutable =
   process.platform === "win32"
     ? path.join(
@@ -480,7 +490,9 @@ test("completes the browser product lifecycle with real WebAuthn ceremonies", as
     page.getByRole("heading", { name: english.auth.bootstrapHeading }),
   ).toBeVisible();
   await page.getByLabel(english.auth.displayName).fill("E2E administrator");
-  await page.getByLabel(english.auth.bootstrapSecret).fill(BOOTSTRAP_SECRET);
+  await page
+    .getByLabel(english.auth.bootstrapSecret)
+    .fill(e2eBootstrapSecret());
   await page.getByRole("button", { name: english.auth.createPasskey }).click();
   await expect(page).toHaveURL(
     `/dashboard/connect/approve?code=${connection.userCode}`,
