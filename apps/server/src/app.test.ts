@@ -165,6 +165,7 @@ describe("foundation server", () => {
     expect(initializer.body).toContain("telemetry: false");
     expect(initializer.body).toContain("agent: { disabled: true }");
     expect(initializer.body).toContain("persistAuth: false");
+    expect(initializer.body).toContain("hideClientButton: true");
     expect(initializer.body).not.toMatch(/(?:https?:)?\/\//u);
 
     for (const retiredUrl of ["/docs/swagger", "/docs/redoc"]) {

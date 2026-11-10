@@ -52,13 +52,15 @@ body { margin: 0; background: #fff; color: #17202a; }
 `;
 
 // Every option keeps the page on local assets: no hosted fonts, telemetry, or
-// AI agent, and credentials entered in the test-request client are not stored.
+// AI agent, no link to the hosted Scalar client, and credentials entered in
+// the test-request client are not stored.
 // The container must not use the id "api-reference": the Scalar bundle mounts
 // a second instance with default options on that id, which loads hosted fonts.
 const scalarInitializer = `
 globalThis.addEventListener("load", () => {
   Scalar.createApiReference("#yaaps-api-reference", {
     agent: { disabled: true },
+    hideClientButton: true,
     persistAuth: false,
     showDeveloperTools: "never",
     telemetry: false,

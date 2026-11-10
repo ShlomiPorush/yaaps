@@ -466,6 +466,8 @@ test("presents the product and API documentation across locales and viewports", 
     .click();
   expect((await healthResponse).status()).toBe(200);
   await expect(client.getByText("200 OK")).toBeVisible();
+  // The hosted Scalar client opens outside YAAPS, so no control may link to it.
+  await expect(page.getByText("Open API Client")).toHaveCount(0);
   await page.keyboard.press("Escape");
   await expect(client).toBeHidden();
   for (const retiredPath of ["/docs/swagger", "/docs/redoc"]) {
