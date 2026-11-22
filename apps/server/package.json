@@ -28,7 +28,7 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
-    "@scalar/api-reference": "1.76.4",
+    "@scalar/api-reference": "1.77.0",
     "@types/better-sqlite3": "9.6.0",
     "@types/css-tree": "3.2.0",
     "tsx": "4.23.15"
