@@ -6,13 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+## [1.9.0] - 2026-11-23
+
 ### Changed
 
 - The server image and CI now run Node.js 26.13.1, the current Node.js 26 LTS release. The workspace accepts Node.js 24 (24.15.0 or later) and 26, and the `yaaps-ai` CLI accepts Node.js 24 and 26.
+- Updated runtime dependencies to `@fastify/static` 10.1.11, `@simplewebauthn/server` 14.1.0, better-sqlite3 13.2.0, Kysely 0.29.9, parse5 8.1.1, and parse5-sax-parser 8.0.1, the API reference to `@scalar/api-reference` 1.77.0, and the CLI to commander 15.1.0, and refreshed development dependencies, including Playwright 1.65.0, Vite 8.3.6, and jsdom 31.0.1.
 
 ### Fixed
 
 - The server image now includes dependencies that npm installs inside the server and contracts workspace folders, so a dependency update that npm cannot hoist no longer stops the server from starting. The Docker verification now prints the container logs when the server fails to start.
+- Updated glob to 14.0.6 through `@fastify/static` to resolve a published advisory.
 
 ## [1.8.4] - 2026-11-10
 
