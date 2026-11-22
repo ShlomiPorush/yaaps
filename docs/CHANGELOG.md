@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Fixed
+
+- The server image now includes dependencies that npm installs inside the server and contracts workspace folders, so a dependency update that npm cannot hoist no longer stops the server from starting. The Docker verification now prints the container logs when the server fails to start.
+
 ## [1.8.4] - 2026-11-10
 
 ### Changed

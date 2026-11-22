@@ -19,7 +19,11 @@ COPY plugins/yaaps/skills/yaaps plugins/yaaps/skills/yaaps
 COPY plugins/yaaps/installers plugins/yaaps/installers
 COPY plugins/yaaps/distribution/build-skill-distribution.mjs plugins/yaaps/distribution/build-skill-distribution.mjs
 
-RUN npm run build && npm prune --omit=dev
+# npm nests a dependency under its workspace when the root copy has another
+# version. Keep both shipped workspace folders present so the runtime COPY
+# steps below always succeed.
+RUN npm run build && npm prune --omit=dev && \
+    mkdir -p apps/server/node_modules packages/contracts/node_modules
 
 FROM node:24.22.2-alpine@sha256:a34ab6d7f6f4813f4d0c5469d74685604b962fbdbf5793a7bc7b4998ecb867c8 AS runtime
 
@@ -37,7 +41,9 @@ COPY --from=build --chown=node:node /app/package.json ./package.json
 COPY --from=build --chown=node:node /app/apps/dashboard/dist ./apps/dashboard/dist
 COPY --from=build --chown=node:node /app/apps/server/dist ./apps/server/dist
 COPY --from=build --chown=node:node /app/apps/server/package.json ./apps/server/package.json
+COPY --from=build --chown=node:node /app/apps/server/node_modules ./apps/server/node_modules
 COPY --from=build --chown=node:node /app/packages/contracts/dist ./packages/contracts/dist
+COPY --from=build --chown=node:node /app/packages/contracts/node_modules ./packages/contracts/node_modules
 COPY --from=build --chown=node:node /app/packages/contracts/package.json ./packages/contracts/package.json
 
 RUN mkdir /data && chown node:node /data
