@@ -6,7 +6,7 @@ This package is the command-line client for [YAAPS](https://yaaps.net), which tu
 npm install -g yaaps-ai
 ```
 
-The installed command is `yaaps`.
+The installed command is `yaaps`. It requires Node.js 24 or 26.
 
 Connect without copying an API key into the agent or shell command. The CLI
 creates the key locally, creates a short-lived approval request, and stores the

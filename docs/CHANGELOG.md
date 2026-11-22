@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Changed
+
+- The server image and CI now run Node.js 26.13.1, the current Node.js 26 LTS release. The workspace accepts Node.js 24 (24.15.0 or later) and 26, and the `yaaps-ai` CLI accepts Node.js 24 and 26.
+
 ### Fixed
 
 - The server image now includes dependencies that npm installs inside the server and contracts workspace folders, so a dependency update that npm cannot hoist no longer stops the server from starting. The Docker verification now prints the container logs when the server fails to start.
