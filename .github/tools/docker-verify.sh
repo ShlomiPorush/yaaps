@@ -36,7 +36,11 @@ invoke_docker_verification() {
   DOCKER_VERIFY_VOLUME_NAME="$volume_name"
 
   cleanup_docker_verification() {
+    local status=$?
     if [[ "$DOCKER_VERIFY_CONTAINER_NAME" =~ ^yaaps-verify-[0-9-]+$ ]]; then
+      if ((status != 0)) && docker container inspect "$DOCKER_VERIFY_CONTAINER_NAME" >/dev/null 2>&1; then
+        docker logs --tail 200 "$DOCKER_VERIFY_CONTAINER_NAME" >&2 || true
+      fi
       docker rm --force "$DOCKER_VERIFY_CONTAINER_NAME" >/dev/null 2>&1 || true
     fi
     if [[ "$DOCKER_VERIFY_VOLUME_NAME" =~ ^yaaps-verify-data-[0-9-]+$ ]]; then
