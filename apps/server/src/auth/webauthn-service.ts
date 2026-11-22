@@ -25,7 +25,7 @@ const SESSION_LIFETIME_SECONDS = 8 * 60 * 60;
 
 // Passkey public key algorithms offered at registration and accepted when
 // verifying it. Pinned so library defaults cannot change them silently; the
-// library would otherwise prefer ML-DSA-44, which Node 24 only offers as an
+// library would otherwise prefer ML-DSA-44, which Node 24 and 26 only offer as an
 // experimental Web Crypto algorithm.
 const SUPPORTED_ALGORITHM_IDS: number[] = [
   COSEALG.EdDSA,

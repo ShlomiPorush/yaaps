@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- Node.js 24
+- Node.js 24.15 or later, or Node.js 26 (CI and the container image use Node.js 26)
 - npm 11
 - Bash 5 in WSL or Linux
 - Docker with Compose
