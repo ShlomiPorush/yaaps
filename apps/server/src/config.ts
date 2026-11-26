@@ -20,6 +20,10 @@ const rpIdSchema = z
   );
 const bootstrapSecretSchema = z.string().min(32).optional();
 
+function resolveConfiguredPath(value: string): string {
+  return value === "" ? value : path.resolve(value);
+}
+
 function parseTrustProxy(raw: string | undefined): boolean | string | string[] {
   if (raw === undefined || raw.trim() === "") return false;
   const value = raw.trim();
@@ -88,10 +92,12 @@ export function loadConfiguration(
     bootstrapSecret: bootstrapSecretSchema.parse(
       environment.YAAPS_BOOTSTRAP_SECRET || undefined,
     ),
-    dashboardDirectory: path.resolve(
+    dashboardDirectory: resolveConfiguredPath(
       environment.YAAPS_DASHBOARD_DIR ?? "apps/dashboard/dist",
     ),
-    dataDirectory: path.resolve(environment.YAAPS_DATA_DIR ?? ".local-data"),
+    dataDirectory: resolveConfiguredPath(
+      environment.YAAPS_DATA_DIR ?? ".local-data",
+    ),
     skillDistributionDirectory:
       environment.YAAPS_SKILL_DISTRIBUTION_DIR ??
       path.resolve(process.cwd(), "apps/server/dist/skill-distribution"),

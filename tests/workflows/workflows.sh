@@ -158,6 +158,15 @@ rollout_git tag v1.5.0-rc.1
 assert_equal "$(rollout_from v1.5.0-rc.1)" 1.3.0 "Rollout from for a pre-release"
 rollout_git tag v1.5.0
 assert_equal "$(rollout_from v1.5.0)" 1.3.0 "Rollout from ignores pre-releases"
+rollout_commit apps/server/src/storage/migrations.ts $'"006_expand": expand,\n"007_drop_note.breaking": dropNote,\n"008_add_index": addIndex,\n"009_drop_title.breaking": dropTitle,'
+rollout_commit apps/server/src/storage/migrations.ts $'"006_expand": expand,\n"007_drop_note.breaking": dropNote,\n"008_add_index": addIndex,'
+rollout_git tag v1.5.1
+rollout_commit apps/server/src/storage/migrations.ts $'"006_expand": expand,\n"007_drop_note.breaking": dropNote,\n"008_add_index": addIndex,\n"009_drop_title.breaking": dropTitle,'
+rollout_git tag v1.5.2
+assert_equal "$(rollout_from v1.5.2)" 1.5.2 "Rollout from a release that brings back a breaking migration reverted before the previous release"
+rollout_commit README.md "release after the brought-back migration"
+rollout_git tag v1.5.3
+assert_equal "$(rollout_from v1.5.3)" 1.5.2 "Rollout from the first release that contains the breaking migration"
 rollout_git rm --quiet apps/server/src/storage/migrations.ts
 rollout_git commit --quiet --message "Lose the migrations"
 rollout_git tag v1.6.0

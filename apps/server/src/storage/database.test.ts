@@ -244,6 +244,14 @@ describe("database migrations", () => {
     }
   });
 
+  it("numbers every migration uniquely and in order", () => {
+    const numbers = Object.keys(YAAPS_MIGRATIONS).map((name) =>
+      Number(name.slice(0, 3)),
+    );
+    expect(new Set(numbers).size).toBe(numbers.length);
+    expect(numbers).toEqual([...numbers].sort((left, right) => left - right));
+  });
+
   it("writes every migration name as a literal that the release workflow reads", async () => {
     const source = await readFile(
       new URL("./migrations.ts", import.meta.url),

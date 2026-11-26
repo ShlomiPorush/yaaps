@@ -122,10 +122,16 @@ describe("skill distribution routes", () => {
       url: `/downloads/skill/${distribution.checksum}/yaaps-skill.zip`,
     });
 
+    const otherBuild = await application.inject({
+      method: "GET",
+      url: `/downloads/skill/${"0".repeat(64)}/yaaps-skill.zip`,
+    });
+
     expect(readiness.statusCode).toBe(503);
     expect(skill.rawPayload).toEqual(distribution.skillPackage);
     expect(addressed.statusCode).toBe(200);
     expect(addressed.rawPayload).toEqual(distribution.skillPackage);
+    expect(otherBuild.statusCode).toBe(503);
     await application.close();
   });
 

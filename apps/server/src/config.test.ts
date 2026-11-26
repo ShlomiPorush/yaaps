@@ -46,6 +46,15 @@ describe("server authentication configuration", () => {
     );
   });
 
+  it("keeps empty data and dashboard directories empty", () => {
+    const configuration = loadConfiguration({
+      YAAPS_DASHBOARD_DIR: "",
+      YAAPS_DATA_DIR: "",
+    });
+    expect(configuration.dataDirectory).toBe("");
+    expect(configuration.dashboardDirectory).toBe("");
+  });
+
   it("accepts operator retention limits only in a valid order", () => {
     expect(
       loadConfiguration({

@@ -296,8 +296,6 @@ export async function buildApplication(
         { err: error },
         "YAAPS data initialization failed.",
       );
-      // onClose only closes a connection reachable via yaapsData; if init threw
-      // before that assignment, close the opened connection here to avoid a leak.
       if (!application.yaapsData && openedDatabase) {
         await openedDatabase.connection.destroy().catch(() => undefined);
       }

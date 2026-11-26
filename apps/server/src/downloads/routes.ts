@@ -159,9 +159,16 @@ export async function registerDistributionRoutes(
         if (own?.sha256 === sha256) {
           filePath = path.join(own.root, fileName);
         } else {
-          const sharedEntry = (
-            await readdir(options.sharedDirectory).catch(() => [])
-          ).find((entry) => entry === sha256);
+          let sharedEntries: string[];
+          try {
+            sharedEntries = await readdir(options.sharedDirectory);
+          } catch (error) {
+            if (!isMissingFileError(error)) {
+              return unavailable(reply);
+            }
+            sharedEntries = [];
+          }
+          const sharedEntry = sharedEntries.find((entry) => entry === sha256);
           if (!sharedEntry) {
             return reply.callNotFound();
           }
