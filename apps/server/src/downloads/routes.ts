@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { open, readFile, stat } from "node:fs/promises";
+import { open, readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 
 import type { FastifyInstance, FastifyReply } from "fastify";
@@ -155,10 +155,18 @@ export async function registerDistributionRoutes(
           return reply.callNotFound();
         }
         const own = await verifiedDistribution().catch(() => null);
-        const filePath =
-          own?.sha256 === sha256
-            ? path.join(own.root, fileName)
-            : path.join(options.sharedDirectory, sha256, fileName);
+        let filePath: string;
+        if (own?.sha256 === sha256) {
+          filePath = path.join(own.root, fileName);
+        } else {
+          const sharedEntry = (
+            await readdir(options.sharedDirectory).catch(() => [])
+          ).find((entry) => entry === sha256);
+          if (!sharedEntry) {
+            return reply.callNotFound();
+          }
+          filePath = path.join(options.sharedDirectory, sharedEntry, fileName);
+        }
         let handle;
         try {
           handle = await open(filePath, "r");
