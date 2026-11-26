@@ -12,7 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
-- A release run refuses a version whose image tag is already published, so a version tag never moves to another image. The CLI is published to npm in its own job, so a failed npm publish can be re-run without publishing the image again.
+- A release run refuses a version whose image tag is already published, so a version tag never moves to another image. `latest` and the npm package are published in their own jobs, so either can be re-run without publishing the image again.
 
 ## [1.9.0] - 2026-11-23
 

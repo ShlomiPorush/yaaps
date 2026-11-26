@@ -128,7 +128,7 @@ Take and verify a backup first (see Backup). Run these commands in the directory
 ```bash
 NEW=X.Y.Z
 IMAGE=ghcr.io/shlomiporush/yaaps
-compose() { env -u VERSION docker compose -p yaaps -f docker-compose.yml --env-file .env "$@"; }
+compose() { env -u VERSION COMPOSE_REMOVE_ORPHANS=false docker compose -p yaaps -f docker-compose.yml --env-file .env "$@"; }
 [ "$(grep -c '^VERSION=' .env)" = 1 ] &&
   RUNNING="$(compose ps --quiet app)" && [ -n "$RUNNING" ] &&
   docker inspect --format 'Running before the update: {{.Config.Image}}' "$RUNNING" &&
@@ -149,21 +149,20 @@ The commands stop at the first step that fails, and nothing after it runs. They:
 4. replace the container in one step from the image that was pulled, and wait until it is healthy;
 5. check that the running container uses that image.
 
-Every Compose command names the project, the file and `.env`, and ignores a `VERSION` exported in the shell, so the shell environment cannot point it at another project or release. If the commands stop before step 4, the old release keeps serving and they can be run again. If `app` is not running, or does not become healthy, restore the backup (see Restore) and set `VERSION` back to the release you wrote down. Rolling back the image alone is not supported once the new release has run its migrations.
+Every Compose command names the project, the file and `.env`, ignores a `VERSION` exported in the shell, and leaves containers of other Compose files alone, so the shell environment cannot point it at another project or release. If the commands stop before step 4, nothing was replaced: the old release keeps serving, or, when the first check found no running `app`, nothing changed and the cause is unrelated to the update. Fix the cause and run them again. If `app` does not become healthy in step 4, restore the backup (see Restore) and set `VERSION` back to the release you wrote down. Rolling back the image alone is not supported once the new release has run its migrations.
 
 ### When a release run fails
 
-The release workflow has three jobs: the image, the npm package, and the GitHub release.
+The release workflow has four jobs: the image (`sha-<commit>`, then `X.Y.Z`), `latest` for stable releases, the npm package, and the GitHub release. `latest` and npm run after the image, and the GitHub release after npm.
 
-- Re-run a failed npm or GitHub release job with "Re-run failed jobs". It does not publish the image again.
-- Re-run a failed image job when it stopped before `X.Y.Z` was pushed.
-- Once `X.Y.Z` is published, the image job refuses to run again. If only the `latest` push failed, copy it from the published version without a rebuild:
+- Re-run a failed `latest`, npm or GitHub release job with "Re-run failed jobs". `latest` points the tag at the published `X.Y.Z` without a rebuild, and none of them publishes the image again.
+- Re-run a failed image job when it stopped before `X.Y.Z` was pushed. Once `X.Y.Z` is published, the image job refuses to run again.
+- The check that refuses published versions requires `latest` to exist. If `latest` was deleted, point it at the latest stable release before publishing:
 
   ```bash
   docker buildx imagetools create -t ghcr.io/shlomiporush/yaaps:latest ghcr.io/shlomiporush/yaaps:X.Y.Z
   ```
 
-- The check that refuses published versions requires `latest` to exist. If `latest` was deleted, recreate it the same way from the latest stable release before publishing.
 - Do not re-run release runs that started before this check existed. They use the earlier workflow, which pushes the version tag again.
 
 ## Observability baseline

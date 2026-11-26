@@ -132,14 +132,11 @@ jobs:
           safe_version="${version//+/_}"
           local_image="yaaps-release:${GITHUB_SHA}"
           compose_sha256="$(sha256sum docker-compose.yml | cut -d ' ' -f 1)"
-          # The version tag must stay after sha-* and before latest; the already-published check relies on it.
+          # The version tag must be pushed last; the already-published check relies on it.
           tags=(
             "$repository:sha-$GITHUB_SHA"
             "$repository:$safe_version"
           )
-          if [[ "$version" != *-* ]]; then
-            tags+=("$repository:latest")
-          fi
 
           docker build \
             --file infra/docker/Dockerfile \
@@ -164,6 +161,32 @@ jobs:
             printf '### Published container image\n\n'
             printf -- '- %s\n' "${tags[@]}"
           } >>"$GITHUB_STEP_SUMMARY"
+
+  latest:
+    name: Point latest at the stable release
+    needs: publish
+    if: ${{ !contains(github.ref_name, '-') }}
+    permissions:
+      contents: read
+      packages: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Point latest at the published version
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+
+          version="${GITHUB_REF_NAME#v}"
+          repository="ghcr.io/${GITHUB_REPOSITORY,,}"
+          release_image="$repository:${version//+/_}"
+
+          printf '%s' "$GHCR_TOKEN" |
+            docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          docker buildx imagetools create --tag "$repository:latest" "$release_image"
+          printf '### Moved latest\n\n- %s:latest now points at %s\n' "$repository" "$release_image" >>"$GITHUB_STEP_SUMMARY"
 
   npm:
     name: Publish the CLI package to npm
