@@ -167,6 +167,9 @@ assert_equal "$(rollout_from v1.5.2)" 1.5.2 "Rollout from a release that brings 
 rollout_commit README.md "release after the brought-back migration"
 rollout_git tag v1.5.3
 assert_equal "$(rollout_from v1.5.3)" 1.5.2 "Rollout from the first release that contains the breaking migration"
+rollout_commit apps/server/src/storage/migrations.ts $'"005_late.breaking": late,\n"006_expand": expand,\n"007_drop_note.breaking": dropNote,\n"008_add_index": addIndex,\n"009_drop_title.breaking": dropTitle,'
+rollout_git tag v1.5.4
+assert_command_fails "Rollout from refuses a release whose migrations sort before released ones" rollout_from v1.5.4
 rollout_git rm --quiet apps/server/src/storage/migrations.ts
 rollout_git commit --quiet --message "Lose the migrations"
 rollout_git tag v1.6.0

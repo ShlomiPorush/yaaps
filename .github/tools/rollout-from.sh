@@ -37,7 +37,7 @@ has_rollout_support_version() {
 }
 
 has_migration() {
-  git show "v$1:$MIGRATIONS_PATH" 2>/dev/null | grep -qF "\"$2\""
+  git show "v$1:$MIGRATIONS_PATH" 2>/dev/null | grep -F "\"$2\"" >/dev/null
 }
 
 oldest_of_newest_run() {
@@ -51,6 +51,20 @@ oldest_of_newest_run() {
     oldest="${versions[index]}"
   done
   printf '%s' "$oldest"
+}
+
+migration_names() {
+  git show "$1:$MIGRATIONS_PATH" | { grep -oE '"[0-9]{3}_[a-z0-9_]+(\.breaking)?":' || true; } | tr -d '":' | sort
+}
+
+previous_migrations_come_first() {
+  local release_tag="$1"
+  local previous_tag="$2"
+  local previous current
+  git cat-file -e "$previous_tag:$MIGRATIONS_PATH" 2>/dev/null || return 0
+  previous="$(migration_names "$previous_tag")"
+  current="$(migration_names "$release_tag")"
+  [[ -z "$previous" || "$current" == "$previous" || "$current" == "$previous"$'\n'* ]]
 }
 
 newest_breaking_migration() {
@@ -83,6 +97,11 @@ compute_rollout_from() {
   if ! has_rollout_support "$release_tag"; then
     printf '%s\n' "$release_version"
     return
+  fi
+  if ((${#candidates[@]} > 0)) && ! previous_migrations_come_first "$release_tag" "v${candidates[-1]}"; then
+    printf 'The migrations of %s do not start with those of v%s, so a database migrated by v%s cannot be upgraded. Number new migrations after the released ones.\n' \
+      "$release_tag" "${candidates[-1]}" "${candidates[-1]}" >&2
+    return 1
   fi
   local first_safe
   first_safe="$(oldest_of_newest_run has_rollout_support_version "" "${candidates[@]}")"

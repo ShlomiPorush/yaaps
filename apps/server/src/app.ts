@@ -336,7 +336,9 @@ export async function buildApplication(
   const distribution = await registerDistributionRoutes(application, {
     directory: options.skillDistributionDirectory,
     publicOrigin,
-    sharedDirectory: path.join(options.dataDirectory, "skill-downloads"),
+    ...(application.yaapsData
+      ? { sharedDirectory: path.join(options.dataDirectory, "skill-downloads") }
+      : {}),
   });
   sharedFilesPublished &&= distribution.sharedFilesPublished;
 
@@ -454,12 +456,14 @@ export async function buildApplication(
         options.dataDirectory,
         "dashboard-assets",
       );
-      let assetRoots = [assetsDirectory, sharedAssetsDirectory];
+      let assetRoots = [assetsDirectory];
       try {
-        await publishMissingFiles(assetsDirectory, sharedAssetsDirectory);
+        if (application.yaapsData) {
+          await publishMissingFiles(assetsDirectory, sharedAssetsDirectory);
+          assetRoots = [assetsDirectory, sharedAssetsDirectory];
+        }
       } catch (error) {
         sharedFilesPublished = false;
-        assetRoots = [assetsDirectory];
         application.log.error(
           { err: error },
           "Dashboard assets could not be copied to the shared asset directory.",

@@ -89,7 +89,7 @@ export async function registerDistributionRoutes(
   options: {
     directory?: string;
     publicOrigin: string;
-    sharedDirectory: string;
+    sharedDirectory?: string;
   },
 ): Promise<{ sharedFilesPublished: boolean }> {
   const origin = new URL(options.publicOrigin).origin;
@@ -156,12 +156,15 @@ export async function registerDistributionRoutes(
         }
         const own = await verifiedDistribution().catch(() => null);
         let filePath: string;
+        const sharedDirectory = options.sharedDirectory;
         if (own?.sha256 === sha256) {
           filePath = path.join(own.root, fileName);
+        } else if (!sharedDirectory) {
+          return reply.callNotFound();
         } else {
           let sharedEntries: string[];
           try {
-            sharedEntries = await readdir(options.sharedDirectory);
+            sharedEntries = await readdir(sharedDirectory);
           } catch (error) {
             if (!isMissingFileError(error)) {
               return unavailable(reply);
@@ -172,7 +175,7 @@ export async function registerDistributionRoutes(
           if (!sharedEntry) {
             return reply.callNotFound();
           }
-          filePath = path.join(options.sharedDirectory, sharedEntry, fileName);
+          filePath = path.join(sharedDirectory, sharedEntry, fileName);
         }
         let handle;
         try {
@@ -248,7 +251,7 @@ export async function registerDistributionRoutes(
   const distribution = options.directory
     ? await verifiedDistribution().catch(() => null)
     : null;
-  if (!distribution) {
+  if (!distribution || !options.sharedDirectory) {
     return { sharedFilesPublished: true };
   }
   try {
