@@ -82,6 +82,90 @@ pre-upgrade backup into a new data directory (see Restore above) and point the
 deployment at it instead. Keep the pre-upgrade backup until the new version has
 been verified in production.
 
+A deployment that pins the version in `.env` updates with the commands in
+"Update a pinned deployment" below.
+
+## Release images and rollouts
+
+### Image tags
+
+Each release `vX.Y.Z` publishes `ghcr.io/shlomiporush/yaaps` with these tags:
+
+| Tag            | Meaning                                                                                        |
+| -------------- | ---------------------------------------------------------------------------------------------- |
+| `X.Y.Z`        | The release. It is pushed only after the release passed full verification, and it never moves. |
+| `sha-<commit>` | The same image, by the commit it was built from.                                               |
+| `latest`       | The latest stable release. Pre-releases do not move it.                                        |
+
+The release workflow refuses to run for a version whose `X.Y.Z` tag already exists, so a re-run cannot replace a published image.
+
+### Rollout labels
+
+Each release image carries two labels for deployment tools that replace a running container with a zero-downtime rollout with docker rollout:
+
+| Label                  | Value                                                                       |
+| ---------------------- | --------------------------------------------------------------------------- |
+| `yaaps.compose-sha256` | The SHA-256 of the tracked `docker-compose.yml` of that release.            |
+| `yaaps.rollout-from`   | The oldest running release that this image may run beside during a rollout. |
+
+Such a tool compares the labels of the running image and the new image, and updates without downtime only when both images have the same `compose-sha256` and the running release is not older than `rollout-from`.
+
+YAAPS is single-instance (see "Single-instance boundary"), so `yaaps.rollout-from` is the release's own version: every update replaces the running container with a short stop. Do not run `docker rollout` on YAAPS directly. It does not read these labels and would start a second instance on the same data directory.
+
+### What the host's Compose file needs
+
+The tracked `docker-compose.yml` is an example. A host that pins the version and is updated by such a tool needs, in its own Compose file and `.env`:
+
+- `name: yaaps` at the top of `docker-compose.yml`;
+- the service `app` with `image: ghcr.io/shlomiporush/yaaps:${VERSION}`;
+- no `container_name`, no published host port, no `network_mode: host`, no `build`, and one replica: route traffic through a reverse proxy, as the example does;
+- exactly one `VERSION=X.Y.Z` line in `.env`. The server ignores this variable when `env_file` passes it to the container.
+
+### Update a pinned deployment
+
+Take and verify a backup first (see Backup). Run these commands in the directory that holds the host's `docker-compose.yml` and `.env`, with the new version in `NEW`:
+
+```bash
+NEW=X.Y.Z
+IMAGE=ghcr.io/shlomiporush/yaaps
+compose() { env -u VERSION docker compose -p yaaps -f docker-compose.yml --env-file .env "$@"; }
+[ "$(grep -c '^VERSION=' .env)" = 1 ] &&
+  RUNNING="$(compose ps --quiet app)" && [ -n "$RUNNING" ] &&
+  docker inspect --format 'Running before the update: {{.Config.Image}}' "$RUNNING" &&
+  docker pull "$IMAGE:$NEW" &&
+  NEW_ID="$(docker image inspect --format '{{.Id}}' "$IMAGE:$NEW")" &&
+  [ "$(env VERSION="$NEW" docker compose -p yaaps -f docker-compose.yml --env-file .env config --images app)" = "$IMAGE:$NEW" ] &&
+  sed -i "s/^VERSION=.*/VERSION=$NEW/" .env &&
+  compose up -d --no-deps --pull never --wait --wait-timeout 300 app &&
+  [ "$(docker inspect --format '{{.Image}}' "$(compose ps --quiet app)")" = "$NEW_ID" ] &&
+  echo "Updated to $NEW."
+```
+
+The commands stop at the first step that fails, and nothing after it runs. They:
+
+1. require one `VERSION` line in `.env` and a running `app` container in the `yaaps` project;
+2. print the image that runs before the update. Write it down with the backup;
+3. pull the new image and check that the Compose file resolves `app` to it before `.env` changes;
+4. replace the container in one step from the image that was pulled, and wait until it is healthy;
+5. check that the running container uses that image.
+
+Every Compose command names the project, the file and `.env`, and ignores a `VERSION` exported in the shell, so the shell environment cannot point it at another project or release. If the commands stop before step 4, the old release keeps serving and they can be run again. If `app` is not running, or does not become healthy, restore the backup (see Restore) and set `VERSION` back to the release you wrote down. Rolling back the image alone is not supported once the new release has run its migrations.
+
+### When a release run fails
+
+The release workflow has three jobs: the image, the npm package, and the GitHub release.
+
+- Re-run a failed npm or GitHub release job with "Re-run failed jobs". It does not publish the image again.
+- Re-run a failed image job when it stopped before `X.Y.Z` was pushed.
+- Once `X.Y.Z` is published, the image job refuses to run again. If only the `latest` push failed, copy it from the published version without a rebuild:
+
+  ```bash
+  docker buildx imagetools create -t ghcr.io/shlomiporush/yaaps:latest ghcr.io/shlomiporush/yaaps:X.Y.Z
+  ```
+
+- The check that refuses published versions requires `latest` to exist. If `latest` was deleted, recreate it the same way from the latest stable release before publishing.
+- Do not re-run release runs that started before this check existed. They use the earlier workflow, which pushes the version tag again.
+
 ## Observability baseline
 
 The server writes structured pino logs to stdout only; there is no metrics

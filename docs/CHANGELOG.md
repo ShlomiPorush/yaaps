@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Added
+
+- Release images carry the `yaaps.compose-sha256` and `yaaps.rollout-from` labels for deployment tools that check whether a release can run beside the running one. Every release currently requires an update with a short stop; see "Release images and rollouts" in `docs/operations.md`.
+
+### Changed
+
+- A release run refuses a version whose image tag is already published, so a version tag never moves to another image. The CLI is published to npm in its own job, so a failed npm publish can be re-run without publishing the image again.
+
 ## [1.9.0] - 2026-11-23
 
 ### Changed
