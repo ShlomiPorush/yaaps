@@ -1,9 +1,12 @@
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { readFile, stat } from "node:fs/promises";
+import { open, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 
 import type { FastifyInstance, FastifyReply } from "fastify";
+
+import { isMissingFileError } from "../storage/blob-store.js";
+import { publishMissingFiles } from "../storage/shared-files.js";
 
 const DISTRIBUTION_FILES = {
   checksum: "yaaps-skill.zip.sha256",
@@ -12,8 +15,17 @@ const DISTRIBUTION_FILES = {
   powershellInstaller: "install-yaaps-skill.ps1",
 } as const;
 
+const SHARED_DOWNLOAD_FILES = [
+  DISTRIBUTION_FILES.package,
+  DISTRIBUTION_FILES.checksum,
+] as const;
+
+const SHA256_PATTERN = /^[a-f0-9]{64}$/u;
+
 interface VerifiedSkillDistribution {
   paths: Record<keyof typeof DISTRIBUTION_FILES, string>;
+  root: string;
+  sha256: string;
 }
 
 async function fileSha256(filePath: string): Promise<string> {
@@ -42,10 +54,10 @@ async function loadVerifiedDistribution(
   const match = /^([a-f0-9]{64}) {2}yaaps-skill\.zip\r?\n?$/u.exec(
     checksumDocument,
   );
-  if (!match || (await fileSha256(paths.package)) !== match[1]) {
+  if (!match?.[1] || (await fileSha256(paths.package)) !== match[1]) {
     throw new Error("Skill package checksum does not match.");
   }
-  return { paths };
+  return { paths, root, sha256: match[1] };
 }
 
 function unavailable(reply: FastifyReply) {
@@ -74,10 +86,15 @@ function sendDownload(
 
 export async function registerDistributionRoutes(
   application: FastifyInstance,
-  options: { directory?: string; publicOrigin: string },
-): Promise<void> {
+  options: {
+    directory?: string;
+    publicOrigin: string;
+    sharedDirectory: string;
+  },
+): Promise<{ sharedFilesPublished: boolean }> {
   const origin = new URL(options.publicOrigin).origin;
-  const packageUrl = `${origin}/downloads/yaaps-skill.zip`;
+  const packageUrl = (sha256: string) =>
+    `${origin}/downloads/skill/${sha256}/${DISTRIBUTION_FILES.package}`;
 
   // These routes are public and unauthenticated. Verifying (full SHA-256 of the
   // package) on every request is a cheap CPU/IO amplification vector, so cache
@@ -126,6 +143,42 @@ export async function registerDistributionRoutes(
     });
   };
 
+  for (const [fileName, contentType, disposition] of [
+    [DISTRIBUTION_FILES.package, "application/zip", "attachment"],
+    [DISTRIBUTION_FILES.checksum, "text/plain; charset=utf-8", "inline"],
+  ] as const) {
+    application.get<{ Params: { sha256: string } }>(
+      `/downloads/skill/:sha256/${fileName}`,
+      async (request, reply) => {
+        const { sha256 } = request.params;
+        if (!SHA256_PATTERN.test(sha256)) {
+          return reply.callNotFound();
+        }
+        const own = await verifiedDistribution().catch(() => null);
+        const filePath =
+          own?.sha256 === sha256
+            ? path.join(own.root, fileName)
+            : path.join(options.sharedDirectory, sha256, fileName);
+        let handle;
+        try {
+          handle = await open(filePath, "r");
+        } catch (error) {
+          if (isMissingFileError(error)) {
+            return reply.callNotFound();
+          }
+          return unavailable(reply);
+        }
+        return sendDownload(
+          reply,
+          handle.createReadStream(),
+          fileName,
+          contentType,
+          disposition,
+        );
+      },
+    );
+  }
+
   registerFile(
     "/downloads/yaaps-skill.zip",
     "package",
@@ -163,7 +216,10 @@ export async function registerDistributionRoutes(
         }
         return sendDownload(
           reply,
-          template.replaceAll("__YAAPS_SKILL_PACKAGE_URL__", packageUrl),
+          template.replaceAll(
+            "__YAAPS_SKILL_PACKAGE_URL__",
+            packageUrl(distribution.sha256),
+          ),
           DISTRIBUTION_FILES[installer.key],
           installer.contentType,
           "inline",
@@ -172,5 +228,26 @@ export async function registerDistributionRoutes(
         return unavailable(reply);
       }
     });
+  }
+
+  const distribution = options.directory
+    ? await verifiedDistribution().catch(() => null)
+    : null;
+  if (!distribution) {
+    return { sharedFilesPublished: true };
+  }
+  try {
+    await publishMissingFiles(
+      distribution.root,
+      path.join(options.sharedDirectory, distribution.sha256),
+      SHARED_DOWNLOAD_FILES,
+    );
+    return { sharedFilesPublished: true };
+  } catch (error) {
+    application.log.error(
+      { err: error },
+      "The skill package could not be copied to the shared download directory.",
+    );
+    return { sharedFilesPublished: false };
   }
 }

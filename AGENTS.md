@@ -30,7 +30,7 @@ These are non-negotiable boundaries unless the repository owner explicitly appro
 - Every `/d/*` HTML response receives a server-controlled CSP `sandbox` without `allow-same-origin` or `allow-scripts`, plus the supporting isolation headers asserted by the report route tests.
 - Uploaded filenames never become filesystem paths. Immutable blobs are written atomically.
 - SQLite metadata and the HTML blob directory are one logical backup unit.
-- The service remains single-instance until storage, cleanup locking, sessions, and shared files are deliberately redesigned and verified.
+- At most two instances share one data directory, on one host, and only during a rollout. Every database transaction takes the SQLite write lock when it begins. A blob becomes visible in `blobs/` only inside the write-locked transaction that records it, and blobs are removed only inside a write-locked transaction that checks their references first. Deletes commit first; blob reclamation then runs in its own transactions, never nested in another one. Background cleanup runs only on the instance that holds the cleanup lock. Each migration is expand-only, so the previous release keeps working on the new schema, or its name ends in `.breaking`.
 - Passkeys are bound to the deployment hostname. Do not register production credentials against a provisional hostname.
 
 ## Docker and data safety
@@ -73,6 +73,14 @@ Releases require explicit owner authorization and happen in a dedicated release 
 3. In `docs/CHANGELOG.md`, insert `## [X.Y.Z] - YYYY-MM-DD` directly beneath an emptied `## Unreleased` heading and move the accumulated bullets into it, keeping the `### Added` / `### Changed` / `### Fixed` order. The GitHub release notes are extracted from exactly this section; a missing heading silently degrades them to a placeholder.
 4. Verify, open the release PR, and merge it with CI green.
 5. Tag the merge commit `vX.Y.Z` and push the tag. The tag workflow rejects the release unless the tag version equals `VERSION`, the root and CLI `package.json` versions, and `FOUNDATION_VERSION`; it then reruns full verification, publishes the container image to `ghcr.io/shlomiporush/yaaps` (`X.Y.Z`, `sha-*`, and `latest` for stable versions), publishes `yaaps-ai` to npm through the OIDC trusted publisher (fails if the version already exists on npm), and creates the GitHub release from the changelog section.
+
+### Migrations and rollouts
+
+During a rollout the new release runs beside the previous one on the same database. Each image carries the `yaaps.rollout-from` label, the oldest running release it may run beside, which `.github/tools/rollout-from.sh` computes from the tag history: the newer of the first release that supports rollouts and the release that added the newest breaking migration.
+
+- An expand-only migration keeps the previous release working on the new schema: new tables, nullable or defaulted columns, and indexes that build within about a second on a production-sized database.
+- Any other migration is breaking: name it `NNN_description.breaking`. This includes a migration that holds the write lock for longer than about a second. The release that adds it is labelled with its own version and is deployed with a short stop instead of a rollout, and an older release refuses to start on the migrated database.
+- Never rename or remove an executed migration.
 
 ## Git and external boundaries
 

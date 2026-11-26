@@ -58,6 +58,7 @@ describe("coordinated data backup and restore", () => {
     const sourceDrafts = new DraftStorage(
       sourceDatabase.connection,
       new HtmlBlobStore(source),
+      { error: () => undefined },
     );
     const draft = await sourceDrafts.createDraft({
       expiresAt: "2026-08-31T08:00:00.000Z",
@@ -93,6 +94,7 @@ describe("coordinated data backup and restore", () => {
     const restoredDrafts = new DraftStorage(
       restoredDatabase.connection,
       new HtmlBlobStore(restored),
+      { error: () => undefined },
     );
     await expect(
       restoredDrafts.resolvePublic(
@@ -143,6 +145,7 @@ describe("coordinated data backup and restore", () => {
     const drafts = new DraftStorage(
       sourceDatabase.connection,
       new HtmlBlobStore(source),
+      { error: () => undefined },
     );
     await drafts.createDraft({
       expiresAt: "2026-08-31T08:00:00.000Z",
@@ -184,7 +187,9 @@ describe("coordinated data backup and restore", () => {
       })
       .executeTakeFirstOrThrow();
     const blobs = new HtmlBlobStore(source);
-    const drafts = new DraftStorage(sourceDatabase.connection, blobs);
+    const drafts = new DraftStorage(sourceDatabase.connection, blobs, {
+      error: () => undefined,
+    });
     const draft = await drafts.createDraft({
       expiresAt: "2026-08-31T08:00:00.000Z",
       html: html("<p>missing during backup</p>"),

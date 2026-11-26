@@ -7,6 +7,7 @@ import { sql } from "kysely";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { openDatabase } from "./database.js";
+import { YAAPS_MIGRATIONS } from "./migrations.js";
 
 const temporaryPaths: string[] = [];
 
@@ -232,6 +233,14 @@ describe("database migrations", () => {
       ).rejects.toThrow();
     } finally {
       await migrated.connection.destroy();
+    }
+  });
+
+  it("names every migration with a number and at most the breaking marker", () => {
+    const names = Object.keys(YAAPS_MIGRATIONS);
+    expect(names.length).toBeGreaterThan(0);
+    for (const name of names) {
+      expect(name).toMatch(/^\d{3}_[a-z0-9]+(?:_[a-z0-9]+)*(?:\.breaking)?$/);
     }
   });
 

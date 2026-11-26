@@ -132,6 +132,7 @@ jobs:
           safe_version="${version//+/_}"
           local_image="yaaps-release:${GITHUB_SHA}"
           compose_sha256="$(sha256sum docker-compose.yml | cut -d ' ' -f 1)"
+          rollout_from="$(bash .github/tools/rollout-from.sh "$GITHUB_REF_NAME")"
           # The version tag must be pushed last; the already-published check relies on it.
           tags=(
             "$repository:sha-$GITHUB_SHA"
@@ -145,7 +146,7 @@ jobs:
             --label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
             --label "org.opencontainers.image.version=$version" \
             --label "yaaps.compose-sha256=$compose_sha256" \
-            --label "yaaps.rollout-from=$version" \
+            --label "yaaps.rollout-from=$rollout_from" \
             --target runtime \
             --tag "$local_image" \
             .
@@ -160,6 +161,7 @@ jobs:
           {
             printf '### Published container image\n\n'
             printf -- '- %s\n' "${tags[@]}"
+            printf '\nyaaps.rollout-from: %s\n' "$rollout_from"
           } >>"$GITHUB_STEP_SUMMARY"
 
   latest:

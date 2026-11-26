@@ -52,7 +52,15 @@ USER node
 
 EXPOSE 3000
 
-HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=6 \
-  CMD node -e "fetch('http://127.0.0.1:3000/readyz').then(response => { if (!response.ok) process.exit(1) }).catch(() => process.exit(1))"
+# docker rollout runs this hook in the old container before it stops it. The
+# drain marker turns the health check unhealthy, so the reverse proxy stops
+# routing to the container while it still finishes the requests it holds.
+LABEL docker-rollout.pre-stop-hook="touch /tmp/drain && sleep 30"
 
-CMD ["node", "apps/server/dist/index.js"]
+HEALTHCHECK --interval=5s --timeout=3s --retries=3 --start-period=30s --start-interval=2s \
+  CMD test ! -e /tmp/drain && node -e "fetch('http://127.0.0.1:3000/readyz').then(response => { if (!response.ok) process.exit(1) }).catch(() => process.exit(1))"
+
+# A restarted container keeps /tmp unless it is a tmpfs, so the start removes
+# a drain marker left from before the restart. exec makes node the process
+# that receives SIGTERM.
+CMD ["sh", "-c", "rm -f /tmp/drain && exec node apps/server/dist/index.js"]
