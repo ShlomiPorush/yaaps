@@ -165,7 +165,6 @@ jobs:
   latest:
     name: Point latest at the stable release
     needs: publish
-    if: ${{ !contains(github.ref_name, '-') }}
     permissions:
       contents: read
       packages: write
@@ -173,6 +172,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Point latest at the published version
+        if: ${{ !contains(github.ref_name, '-') }}
         shell: bash
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -223,7 +223,7 @@ jobs:
 
   release:
     name: Create the GitHub release
-    needs: npm
+    needs: [latest, npm]
     permissions:
       contents: write
     runs-on: ubuntu-latest

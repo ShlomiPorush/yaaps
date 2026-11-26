@@ -153,11 +153,22 @@ Every Compose command names the project, the file and `.env`, ignores a `VERSION
 
 ### When a release run fails
 
-The release workflow has four jobs: the image (`sha-<commit>`, then `X.Y.Z`), `latest` for stable releases, the npm package, and the GitHub release. `latest` and npm run after the image, and the GitHub release after npm.
+The release workflow has four jobs: the image (`sha-<commit>`, then `X.Y.Z`), `latest`, the npm package, and the GitHub release. `latest` and npm run after the image, and the GitHub release after both. For a pre-release, the `latest` job leaves the tag as it is.
 
-- Re-run a failed `latest`, npm or GitHub release job with "Re-run failed jobs". `latest` points the tag at the published `X.Y.Z` without a rebuild, and none of them publishes the image again.
+- Re-run a failed `latest`, npm or GitHub release job with "Re-run failed jobs". `latest` points the tag at the published `X.Y.Z` without a rebuild, and none of them publishes the image again. Re-run a failed `latest` job only while no newer stable release is published; otherwise it would move `latest` back to an older release.
 - Re-run a failed image job when it stopped before `X.Y.Z` was pushed. Once `X.Y.Z` is published, the image job refuses to run again.
-- The check that refuses published versions requires `latest` to exist. If `latest` was deleted, point it at the latest stable release before publishing:
+- If the image job failed although `X.Y.Z` is published, for example because the connection broke at the end of the push, the later jobs did not run. Check that the published image was built from the release tag, from a checkout of the repository:
+
+  ```bash
+  TAG=vX.Y.Z
+  IMAGE=ghcr.io/shlomiporush/yaaps
+  [ "$(docker buildx imagetools inspect "$IMAGE:${TAG#v}" --format '{{index .Image.Config.Labels "org.opencontainers.image.revision"}}')" = "$(git rev-parse "$TAG^{commit}")" ] &&
+    echo "$IMAGE:${TAG#v} was built from $TAG."
+  ```
+
+  When it prints that line, finish the release by hand from the tagged commit: point `latest` at the version as shown below (stable releases only), publish the CLI with `npm ci`, `npm run build --workspace yaaps-ai` and `npm publish --workspace yaaps-ai --access public` (a package published by hand has no provenance), and create the GitHub release with `gh release create "$TAG" --verify-tag --title "$TAG"` and the changelog section as notes. When it does not print that line, do not finish the release: the published image was not built from this tag, or the check could not read it.
+
+- The check that refuses published versions requires `latest` to exist. If `latest` was deleted, point it at the latest stable release before publishing. The same command points `latest` at a version by hand:
 
   ```bash
   docker buildx imagetools create -t ghcr.io/shlomiporush/yaaps:latest ghcr.io/shlomiporush/yaaps:X.Y.Z
