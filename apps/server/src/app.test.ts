@@ -334,6 +334,22 @@ describe("foundation server", () => {
     await application.close();
   });
 
+  it("starts ready when the cleanup lock file cannot be opened", async () => {
+    const directory = await temporaryDirectory();
+    await mkdir(path.join(directory, "yaaps-leader.sqlite"));
+    const application = await buildApplication({ dataDirectory: directory });
+    try {
+      expect(application.yaapsData).not.toBeNull();
+      const response = await application.inject({
+        method: "GET",
+        url: "/readyz",
+      });
+      expect(response.statusCode).toBe(200);
+    } finally {
+      await application.close();
+    }
+  });
+
   it("returns a stable public error for unknown routes", async () => {
     const application = await buildApplication({
       dataDirectory: await temporaryDirectory(),

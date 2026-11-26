@@ -42,8 +42,12 @@ oldest_release_containing() {
 
 newest_breaking_migration() {
   local release_tag="$1"
-  local names
-  names="$(git show "$release_tag:$MIGRATIONS_PATH" 2>/dev/null | grep -oE '"[0-9]{3}_[a-z0-9_]+\.breaking"' || true)"
+  local source names
+  source="$(git show "$release_tag:$MIGRATIONS_PATH")" || {
+    printf 'Cannot read %s at %s.\n' "$MIGRATIONS_PATH" "$release_tag" >&2
+    return 1
+  }
+  names="$(printf '%s\n' "$source" | grep -oE '"[0-9]{3}_[a-z0-9_]+\.breaking"' || true)"
   [[ -n "$names" ]] || return 0
   printf '%s\n' "$names" | tr -d '"' | sort | tail -n 1
 }
@@ -78,6 +82,10 @@ compute_rollout_from() {
     first_safe="$(oldest_release_containing "$anchor" "${candidates[@]}")"
   fi
   [[ -n "$first_safe" ]] || first_safe="$release_version"
+  if [[ -z "$anchor" ]]; then
+    printf '%s\n' "$release_version"
+    return
+  fi
 
   local breaking breaking_floor=""
   breaking="$(newest_breaking_migration "$release_tag")"

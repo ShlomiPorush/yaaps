@@ -265,7 +265,6 @@ export async function buildApplication(
   };
   const application = Fastify(serverOptions);
   let cleanupWorker: RetentionCleanupWorker | null = null;
-  let leaderLock: RetentionLeaderLock | null = null;
   let sharedFilesPublished = true;
   application.decorate("yaapsData", null);
   configureRequestErrors(application);
@@ -283,7 +282,7 @@ export async function buildApplication(
         application.log,
       );
       const authentication = new AuthenticationRepository(database.connection);
-      leaderLock = new RetentionLeaderLock(options.dataDirectory);
+      const leaderLock = new RetentionLeaderLock(options.dataDirectory);
       application.yaapsData = { authentication, blobs, database, drafts };
       cleanupWorker = new RetentionCleanupWorker(
         drafts,
@@ -307,7 +306,6 @@ export async function buildApplication(
 
   application.addHook("onClose", async () => {
     await cleanupWorker?.stop();
-    leaderLock?.close();
     await application.yaapsData?.database.connection.destroy();
   });
 

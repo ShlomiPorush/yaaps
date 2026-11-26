@@ -131,6 +131,7 @@ rollout_from() {
 
 rollout_git init --quiet --initial-branch=main
 rollout_commit README.md "first release"
+rollout_commit apps/server/src/storage/migrations.ts $'"006_expand": expand,'
 rollout_git tag v1.0.0
 rollout_commit .github/tools/rollout-from.sh "rollout script"
 rollout_git checkout --quiet -b side
@@ -157,6 +158,10 @@ rollout_git tag v1.5.0-rc.1
 assert_equal "$(rollout_from v1.5.0-rc.1)" 1.3.0 "Rollout from for a pre-release"
 rollout_git tag v1.5.0
 assert_equal "$(rollout_from v1.5.0)" 1.3.0 "Rollout from ignores pre-releases"
+rollout_git rm --quiet apps/server/src/storage/migrations.ts
+rollout_git commit --quiet --message "Lose the migrations"
+rollout_git tag v1.6.0
+assert_command_fails "Rollout from refuses a release whose migrations it cannot read" rollout_from v1.6.0
 assert_command_fails "Rollout from refuses an unknown tag" rollout_from v9.9.9
 assert_command_fails "Rollout from refuses a tag that is not a release" rollout_from main
 

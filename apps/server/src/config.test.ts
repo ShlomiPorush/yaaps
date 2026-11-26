@@ -33,6 +33,19 @@ describe("server authentication configuration", () => {
     ).toBe("custom-skill-bundle");
   });
 
+  it("resolves relative data and dashboard directories to absolute paths", () => {
+    const configuration = loadConfiguration({
+      YAAPS_DASHBOARD_DIR: "apps/dashboard/dist",
+      YAAPS_DATA_DIR: ".local-data",
+    });
+    expect(configuration.dataDirectory).toBe(
+      path.resolve(process.cwd(), ".local-data"),
+    );
+    expect(configuration.dashboardDirectory).toBe(
+      path.resolve(process.cwd(), "apps/dashboard/dist"),
+    );
+  });
+
   it("accepts operator retention limits only in a valid order", () => {
     expect(
       loadConfiguration({

@@ -39,7 +39,7 @@ export class RetentionCleanupWorker {
       clearInterval(this.#timer);
       this.#timer = null;
     }
-    await this.#active;
+    await this.#active?.catch(() => undefined);
   }
 
   async #runAsLeader(now: Date): Promise<CleanupResult | null> {

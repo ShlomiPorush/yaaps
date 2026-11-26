@@ -91,10 +91,15 @@ export class HtmlBlobStore {
     await mkdir(path.dirname(destinationPath), { recursive: true });
     const handle = await open(temporaryPath, "wx", 0o600);
     try {
-      await handle.writeFile(content);
-      await handle.sync();
-    } finally {
-      await handle.close();
+      try {
+        await handle.writeFile(content);
+        await handle.sync();
+      } finally {
+        await handle.close();
+      }
+    } catch (error) {
+      await unlinkIfPresent(temporaryPath).catch(() => undefined);
+      throw error;
     }
 
     const prepared = {

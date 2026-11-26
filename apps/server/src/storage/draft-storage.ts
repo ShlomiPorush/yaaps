@@ -508,7 +508,11 @@ export class DraftStorage {
     const blobKeys = await this.database
       .transaction()
       .execute(async (transaction) => {
-        const keys = await this.#blobKeysOfDraft(transaction, input.draftId);
+        const keys = await this.#blobKeysOfDraft(
+          transaction,
+          input.draftId,
+          input.ownerId,
+        );
         const result = await transaction
           .deleteFrom("drafts")
           .where("id", "=", input.draftId)
@@ -778,13 +782,18 @@ export class DraftStorage {
   async #blobKeysOfDraft(
     transaction: Transaction<DatabaseSchema>,
     draftId: string,
+    ownerId?: string,
   ): Promise<string[]> {
-    const rows = await transaction
+    let query = transaction
       .selectFrom("versions")
-      .select("blob_key")
+      .innerJoin("drafts", "drafts.id", "versions.draft_id")
+      .select("versions.blob_key")
       .distinct()
-      .where("draft_id", "=", draftId)
-      .execute();
+      .where("versions.draft_id", "=", draftId);
+    if (ownerId !== undefined) {
+      query = query.where("drafts.owner_id", "=", ownerId);
+    }
+    const rows = await query.execute();
     return rows.map((row) => row.blob_key);
   }
 

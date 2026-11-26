@@ -44,6 +44,26 @@ describe("retention cleanup worker", () => {
     }
   });
 
+  it("stops cleanly while a failing run is still active", async () => {
+    let rejectRun: (error: Error) => void = () => undefined;
+    const worker = new RetentionCleanupWorker(
+      {
+        cleanupExpired: () =>
+          new Promise((_resolve, reject) => {
+            rejectRun = reject;
+          }),
+      },
+      0,
+      { error: vi.fn(), info: vi.fn() },
+      alwaysLeader,
+    );
+    const run = worker.runOnce();
+    const stopped = worker.stop();
+    rejectRun(new Error("SQLITE_BUSY"));
+    await expect(run).rejects.toThrow("SQLITE_BUSY");
+    await expect(stopped).resolves.toBeUndefined();
+  });
+
   it("coalesces overlapping runs and reports one cleanup result", async () => {
     let release: ((value: CleanupResult) => void) | undefined;
     const cleanupExpired = vi.fn(

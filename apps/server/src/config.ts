@@ -88,11 +88,10 @@ export function loadConfiguration(
     bootstrapSecret: bootstrapSecretSchema.parse(
       environment.YAAPS_BOOTSTRAP_SECRET || undefined,
     ),
-    dashboardDirectory:
-      environment.YAAPS_DASHBOARD_DIR ??
-      path.resolve(process.cwd(), "apps/dashboard/dist"),
-    dataDirectory:
-      environment.YAAPS_DATA_DIR ?? path.resolve(process.cwd(), ".local-data"),
+    dashboardDirectory: path.resolve(
+      environment.YAAPS_DASHBOARD_DIR ?? "apps/dashboard/dist",
+    ),
+    dataDirectory: path.resolve(environment.YAAPS_DATA_DIR ?? ".local-data"),
     skillDistributionDirectory:
       environment.YAAPS_SKILL_DISTRIBUTION_DIR ??
       path.resolve(process.cwd(), "apps/server/dist/skill-distribution"),

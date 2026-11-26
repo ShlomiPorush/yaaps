@@ -14,32 +14,26 @@ function isBusyError(error: unknown): boolean {
 }
 
 export class RetentionLeaderLock {
-  readonly #lock: BetterSqlite3.Database;
+  readonly #path: string;
 
   constructor(dataDirectory: string) {
-    this.#lock = new BetterSqlite3(
-      path.join(dataDirectory, "yaaps-leader.sqlite"),
-      { timeout: 0 },
-    );
+    this.#path = path.join(dataDirectory, "yaaps-leader.sqlite");
   }
 
   async runIfLeader<T>(run: () => Promise<T>): Promise<LeaderRun<T>> {
+    const lock = new BetterSqlite3(this.#path, { timeout: 0 });
     try {
-      this.#lock.exec("begin immediate");
-    } catch (error) {
-      if (isBusyError(error)) {
-        return { led: false };
+      try {
+        lock.exec("begin immediate");
+      } catch (error) {
+        if (isBusyError(error)) {
+          return { led: false };
+        }
+        throw error;
       }
-      throw error;
-    }
-    try {
       return { led: true, result: await run() };
     } finally {
-      this.#lock.exec("rollback");
+      lock.close();
     }
-  }
-
-  close(): void {
-    this.#lock.close();
   }
 }

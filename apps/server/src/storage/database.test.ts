@@ -244,6 +244,16 @@ describe("database migrations", () => {
     }
   });
 
+  it("writes every migration name as a literal that the release workflow reads", async () => {
+    const source = await readFile(
+      new URL("./migrations.ts", import.meta.url),
+      "utf8",
+    );
+    for (const name of Object.keys(YAAPS_MIGRATIONS)) {
+      expect(source).toContain(`"${name}":`);
+    }
+  });
+
   it("enforces foreign keys", async () => {
     const database = await openDatabase(await temporaryDirectory());
 
