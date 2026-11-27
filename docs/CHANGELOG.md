@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+## [1.10.0] - 2026-11-27
+
 ### Added
 
 - YAAPS can be updated with a zero-downtime rollout. The new container runs beside the old one on the same data directory while the old one drains, and the image tells docker rollout to drain it before it stops, so the reverse proxy stops sending it requests first. The host's Compose file must not override the image's health check; see "Two instances during a rollout" and "What the host's Compose file needs" in `docs/operations.md`.
