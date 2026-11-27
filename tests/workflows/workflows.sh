@@ -107,4 +107,74 @@ assert_equal "${CI_AREAS[cli]}" true "Dependency change without VERSION keeps CL
 assert_equal "${CI_AREAS[browser]}" true "Dependency change without VERSION keeps browser"
 assert_equal "${CI_AREAS[infrastructure]}" true "Dependency change without VERSION keeps infrastructure"
 
+ROLLOUT_FROM_SCRIPT="$WORKFLOW_TEST_DIRECTORY/../../.github/tools/rollout-from.sh"
+ROLLOUT_REPOSITORY="$(mktemp -d)"
+trap 'rm -rf "$ROLLOUT_REPOSITORY"' EXIT
+
+rollout_git() {
+  git -C "$ROLLOUT_REPOSITORY" -c user.name="Rollout test" -c user.email="rollout@example.invalid" \
+    -c commit.gpgsign=false -c tag.gpgsign=false "$@"
+}
+
+rollout_commit() {
+  local path="$1"
+  local content="$2"
+  mkdir -p "$ROLLOUT_REPOSITORY/$(dirname -- "$path")"
+  printf '%s\n' "$content" >"$ROLLOUT_REPOSITORY/$path"
+  rollout_git add -- "$path"
+  rollout_git commit --quiet --message "Change $path"
+}
+
+rollout_from() {
+  (cd "$ROLLOUT_REPOSITORY" && bash "$ROLLOUT_FROM_SCRIPT" "$1")
+}
+
+rollout_git init --quiet --initial-branch=main
+rollout_commit README.md "first release"
+rollout_commit apps/server/src/storage/migrations.ts $'"006_expand": expand,'
+rollout_git tag v1.0.0
+rollout_commit .github/tools/rollout-from.sh "rollout script"
+rollout_git checkout --quiet -b side
+rollout_commit side.txt "release from another branch"
+rollout_git tag v1.0.1
+rollout_git checkout --quiet main
+rollout_commit README.md "second release"
+rollout_git tag --annotate v1.1.0 --message "v1.1.0"
+assert_equal "$(rollout_from v1.1.0)" 1.1.0 "Rollout from without an earlier safe release ignores other branches"
+rollout_commit README.md "third release"
+rollout_commit .github/tools/rollout-from.sh "rollout script, revised"
+rollout_git tag v1.2.0
+assert_equal "$(rollout_from v1.2.0)" 1.1.0 "Rollout from the first safe release"
+assert_equal "$(rollout_from v1.1.0)" 1.1.0 "Rollout from ignores later releases"
+assert_equal "$(rollout_from v1.0.0)" 1.0.0 "Rollout from before the rollout script"
+rollout_commit apps/server/src/storage/migrations.ts $'"006_expand": expand,\n"007_drop_note.breaking": dropNote,'
+rollout_git tag v1.3.0
+assert_equal "$(rollout_from v1.3.0)" 1.3.0 "Rollout from a release that adds a breaking migration"
+rollout_commit README.md "fifth release"
+rollout_git tag v1.4.0
+assert_equal "$(rollout_from v1.4.0)" 1.3.0 "Rollout from the release that added the breaking migration"
+rollout_commit apps/server/src/storage/migrations.ts $'"006_expand": expand,\n"007_drop_note.breaking": dropNote,\n"008_add_index": addIndex,'
+rollout_git tag v1.5.0-rc.1
+assert_equal "$(rollout_from v1.5.0-rc.1)" 1.3.0 "Rollout from for a pre-release"
+rollout_git tag v1.5.0
+assert_equal "$(rollout_from v1.5.0)" 1.3.0 "Rollout from ignores pre-releases"
+rollout_commit apps/server/src/storage/migrations.ts $'"006_expand": expand,\n"007_drop_note.breaking": dropNote,\n"008_add_index": addIndex,\n"009_drop_title.breaking": dropTitle,'
+rollout_commit apps/server/src/storage/migrations.ts $'"006_expand": expand,\n"007_drop_note.breaking": dropNote,\n"008_add_index": addIndex,'
+rollout_git tag v1.5.1
+rollout_commit apps/server/src/storage/migrations.ts $'"006_expand": expand,\n"007_drop_note.breaking": dropNote,\n"008_add_index": addIndex,\n"009_drop_title.breaking": dropTitle,'
+rollout_git tag v1.5.2
+assert_equal "$(rollout_from v1.5.2)" 1.5.2 "Rollout from a release that brings back a breaking migration reverted before the previous release"
+rollout_commit README.md "release after the brought-back migration"
+rollout_git tag v1.5.3
+assert_equal "$(rollout_from v1.5.3)" 1.5.2 "Rollout from the first release that contains the breaking migration"
+rollout_commit apps/server/src/storage/migrations.ts $'"005_late.breaking": late,\n"006_expand": expand,\n"007_drop_note.breaking": dropNote,\n"008_add_index": addIndex,\n"009_drop_title.breaking": dropTitle,'
+rollout_git tag v1.5.4
+assert_command_fails "Rollout from refuses a release whose migrations sort before released ones" rollout_from v1.5.4
+rollout_git rm --quiet apps/server/src/storage/migrations.ts
+rollout_git commit --quiet --message "Lose the migrations"
+rollout_git tag v1.6.0
+assert_command_fails "Rollout from refuses a release whose migrations it cannot read" rollout_from v1.6.0
+assert_command_fails "Rollout from refuses an unknown tag" rollout_from v9.9.9
+assert_command_fails "Rollout from refuses a tag that is not a release" rollout_from main
+
 printf '%d Bash workflow tests passed.\n' "$PASSED_TESTS"

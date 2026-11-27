@@ -67,6 +67,19 @@ describe("skill distribution routes", () => {
       url: "/downloads/yaaps-skill.zip.sha256",
     });
     expect(checksum.body).toContain(distribution.checksum);
+    const addressedChecksum = await application.inject({
+      method: "GET",
+      url: `/downloads/skill/${distribution.checksum}/yaaps-skill.zip.sha256`,
+    });
+    expect(addressedChecksum.statusCode).toBe(200);
+    expect(addressedChecksum.body).toBe(checksum.body);
+    for (const url of [
+      `/downloads/skill/${"0".repeat(64)}/yaaps-skill.zip`,
+      "/downloads/skill/..%2F..%2Fyaaps.sqlite/yaaps-skill.zip",
+    ]) {
+      const missing = await application.inject({ method: "GET", url });
+      expect(missing.statusCode).toBe(404);
+    }
 
     for (const [url, filename] of [
       ["/downloads/install-skill.ps1", "install-yaaps-skill.ps1"],
@@ -77,10 +90,48 @@ describe("skill distribution routes", () => {
       expect(response.headers["content-disposition"]).toContain(filename);
       expect(response.headers["content-disposition"]).toContain("inline");
       expect(response.body).toContain(
-        "https://self-hosted.example/downloads/yaaps-skill.zip",
+        `https://self-hosted.example/downloads/skill/${distribution.checksum}/yaaps-skill.zip`,
       );
       expect(response.body).not.toContain("__YAAPS_SKILL_PACKAGE_URL__");
     }
+    await application.close();
+  });
+
+  it("keeps serving the fixed download addresses and stays not ready when the shared copy fails", async () => {
+    const distributionDirectory = await temporaryDirectory(
+      "yaaps-skill-distribution-",
+    );
+    const distribution = await createDistribution(distributionDirectory);
+    const dataDirectory = await temporaryDirectory("yaaps-download-data-");
+    await writeFile(path.join(dataDirectory, "skill-downloads"), "occupied");
+    const application = await buildApplication({
+      dataDirectory,
+      skillDistributionDirectory: distributionDirectory,
+    });
+
+    const readiness = await application.inject({
+      method: "GET",
+      url: "/readyz",
+    });
+    const skill = await application.inject({
+      method: "GET",
+      url: "/downloads/yaaps-skill.zip",
+    });
+    const addressed = await application.inject({
+      method: "GET",
+      url: `/downloads/skill/${distribution.checksum}/yaaps-skill.zip`,
+    });
+
+    const otherBuild = await application.inject({
+      method: "GET",
+      url: `/downloads/skill/${"0".repeat(64)}/yaaps-skill.zip`,
+    });
+
+    expect(readiness.statusCode).toBe(503);
+    expect(skill.rawPayload).toEqual(distribution.skillPackage);
+    expect(addressed.statusCode).toBe(200);
+    expect(addressed.rawPayload).toEqual(distribution.skillPackage);
+    expect(otherBuild.statusCode).toBe(503);
     await application.close();
   });
 

@@ -5,7 +5,11 @@ import { sql, type Kysely, type Selectable, type Transaction } from "kysely";
 import type { ReportResourcePolicy } from "@yaaps/contracts";
 
 import { validateHtmlDocument } from "../reports/html-policy.js";
-import type { HtmlBlobStore } from "./blob-store.js";
+import {
+  isMissingFileError,
+  type HtmlBlobStore,
+  type PreparedBlob,
+} from "./blob-store.js";
 import type { DatabaseSchema, DraftsTable } from "./schema.js";
 import { insertAuditEvent } from "./audit-log.js";
 
@@ -90,6 +94,22 @@ export interface PaginatedVersions {
 export interface CleanupResult {
   deletedDrafts: number;
   reclaimedBlobs: number;
+  removedTemporaryFiles: number;
+}
+
+export interface StorageLogger {
+  error(details: Record<string, unknown>, message: string): void;
+}
+
+const EXPIRY_BATCH_SIZE = 20;
+const RECLAMATION_BATCH_SIZE = 100;
+
+function batches<T>(items: readonly T[], size: number): T[][] {
+  const result: T[][] = [];
+  for (let start = 0; start < items.length; start += size) {
+    result.push(items.slice(start, start + size));
+  }
+  return result;
 }
 
 export type PublicReportResolution =
@@ -111,26 +131,7 @@ interface PendingPublicView {
   versionNumber: number;
 }
 
-class ExclusiveOperations {
-  #tail: Promise<void> = Promise.resolve();
-
-  async run<T>(operation: () => Promise<T>): Promise<T> {
-    const previous = this.#tail;
-    let release: () => void = () => undefined;
-    this.#tail = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    await previous;
-    try {
-      return await operation();
-    } finally {
-      release();
-    }
-  }
-}
-
 export class DraftStorage {
-  readonly #operations = new ExclusiveOperations();
   readonly #pendingPublicViews: PendingPublicView[] = [];
   #publicViewFlushActive = false;
   #publicViewFlushScheduled = false;
@@ -138,23 +139,24 @@ export class DraftStorage {
   constructor(
     private readonly database: Kysely<DatabaseSchema>,
     private readonly blobs: HtmlBlobStore,
+    private readonly logger: StorageLogger,
   ) {}
 
   async createDraft(input: CreateDraftInput): Promise<StoredDraftVersion> {
-    return this.#operations.run(async () => {
-      const resourcePolicy = input.resourcePolicy ?? "connected";
-      validateHtmlDocument(input.html, resourcePolicy);
-      const blob = await this.blobs.store(input.html);
-      // randomInt avoids modulo bias across the 62-character alphabet.
-      const alphabet =
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-      const draftId = Array.from(
-        { length: 16 },
-        () => alphabet[randomInt(alphabet.length)],
-      ).join("");
-      const createdAt = new Date().toISOString();
+    const resourcePolicy = input.resourcePolicy ?? "connected";
+    validateHtmlDocument(input.html, resourcePolicy);
+    const blob = await this.blobs.prepare(input.html);
+    const alphabet =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    const draftId = Array.from(
+      { length: 16 },
+      () => alphabet[randomInt(alphabet.length)],
+    ).join("");
+    const createdAt = new Date().toISOString();
 
+    try {
       await this.database.transaction().execute(async (transaction) => {
+        await this.blobs.publish(blob);
         await transaction
           .insertInto("drafts")
           .values({
@@ -185,31 +187,33 @@ export class DraftStorage {
           userId: input.ownerId,
         });
       });
+    } finally {
+      await this.#discardPreparedBlob(blob);
+    }
 
-      return {
-        blobKey: blob.key,
-        byteLength: blob.byteLength,
-        createdAt,
-        draftId,
-        resourcePolicy,
-        sha256: blob.sha256,
-        versionNumber: 1,
-        viewCount: 0,
-      };
-    });
+    return {
+      blobKey: blob.key,
+      byteLength: blob.byteLength,
+      createdAt,
+      draftId,
+      resourcePolicy,
+      sha256: blob.sha256,
+      versionNumber: 1,
+      viewCount: 0,
+    };
   }
 
   async addVersion(input: AddVersionInput): Promise<StoredDraftVersion> {
-    return this.#operations.run(async () => {
-      if (!(await this.findForOwner(input.ownerId, input.draftId))) {
-        throw new DraftNotFoundError();
-      }
-      const resourcePolicy = input.resourcePolicy ?? "connected";
-      validateHtmlDocument(input.html, resourcePolicy);
-      const blob = await this.blobs.store(input.html);
-      const createdAt = new Date().toISOString();
-      let versionNumber = 0;
+    if (!(await this.findForOwner(input.ownerId, input.draftId))) {
+      throw new DraftNotFoundError();
+    }
+    const resourcePolicy = input.resourcePolicy ?? "connected";
+    validateHtmlDocument(input.html, resourcePolicy);
+    const blob = await this.blobs.prepare(input.html);
+    const createdAt = new Date().toISOString();
+    let versionNumber = 0;
 
+    try {
       await this.database.transaction().execute(async (transaction) => {
         const draft = await transaction
           .selectFrom("drafts")
@@ -222,6 +226,7 @@ export class DraftStorage {
         }
 
         versionNumber = draft.latest_version_number + 1;
+        await this.blobs.publish(blob);
         await this.#insertVersion(transaction, {
           ...blob,
           apiKeyId: input.uploadedByApiKeyId ?? null,
@@ -252,18 +257,20 @@ export class DraftStorage {
           userId: input.ownerId,
         });
       });
+    } finally {
+      await this.#discardPreparedBlob(blob);
+    }
 
-      return {
-        blobKey: blob.key,
-        byteLength: blob.byteLength,
-        createdAt,
-        draftId: input.draftId,
-        resourcePolicy,
-        sha256: blob.sha256,
-        versionNumber,
-        viewCount: 0,
-      };
-    });
+    return {
+      blobKey: blob.key,
+      byteLength: blob.byteLength,
+      createdAt,
+      draftId: input.draftId,
+      resourcePolicy,
+      sha256: blob.sha256,
+      versionNumber,
+      viewCount: 0,
+    };
   }
 
   async findForOwner(
@@ -440,58 +447,56 @@ export class DraftStorage {
     status?: DraftsTable["status"];
     title?: string | null;
   }): Promise<StoredDraft> {
-    return this.#operations.run(async () => {
-      const updatedAt = new Date().toISOString();
-      return this.database.transaction().execute(async (transaction) => {
-        const changes: {
-          category?: string | null;
-          expires_at?: string;
-          status?: DraftsTable["status"];
-          title?: string | null;
-          updated_at: string;
-        } = { updated_at: updatedAt };
-        if (input.category !== undefined) {
-          changes.category = input.category;
-        }
-        if (input.expiresAt !== undefined) {
-          changes.expires_at = input.expiresAt;
-        }
-        if (input.status !== undefined) {
-          changes.status = input.status;
-        }
-        if (input.title !== undefined) {
-          changes.title = input.title;
-        }
-        const result = await transaction
-          .updateTable("drafts")
-          .set(changes)
-          .where("id", "=", input.draftId)
-          .where("owner_id", "=", input.ownerId)
-          .returningAll()
-          .executeTakeFirst();
-        if (!result) {
-          throw new DraftNotFoundError();
-        }
-        await this.#insertAudit(transaction, {
-          action: "draft.updated",
-          apiKeyId: input.apiKeyId,
-          metadata: {
-            categoryChanged: input.category !== undefined,
-            expiryChanged: input.expiresAt !== undefined,
-            status: input.status,
-            titleChanged: input.title !== undefined,
-          },
-          targetId: input.draftId,
-          userId: input.ownerId,
-        });
-        const version = await transaction
-          .selectFrom("versions")
-          .select("resource_policy")
-          .where("draft_id", "=", result.id)
-          .where("version_number", "=", result.latest_version_number)
-          .executeTakeFirstOrThrow();
-        return { ...result, resourcePolicy: version.resource_policy };
+    const updatedAt = new Date().toISOString();
+    return this.database.transaction().execute(async (transaction) => {
+      const changes: {
+        category?: string | null;
+        expires_at?: string;
+        status?: DraftsTable["status"];
+        title?: string | null;
+        updated_at: string;
+      } = { updated_at: updatedAt };
+      if (input.category !== undefined) {
+        changes.category = input.category;
+      }
+      if (input.expiresAt !== undefined) {
+        changes.expires_at = input.expiresAt;
+      }
+      if (input.status !== undefined) {
+        changes.status = input.status;
+      }
+      if (input.title !== undefined) {
+        changes.title = input.title;
+      }
+      const result = await transaction
+        .updateTable("drafts")
+        .set(changes)
+        .where("id", "=", input.draftId)
+        .where("owner_id", "=", input.ownerId)
+        .returningAll()
+        .executeTakeFirst();
+      if (!result) {
+        throw new DraftNotFoundError();
+      }
+      await this.#insertAudit(transaction, {
+        action: "draft.updated",
+        apiKeyId: input.apiKeyId,
+        metadata: {
+          categoryChanged: input.category !== undefined,
+          expiryChanged: input.expiresAt !== undefined,
+          status: input.status,
+          titleChanged: input.title !== undefined,
+        },
+        targetId: input.draftId,
+        userId: input.ownerId,
       });
+      const version = await transaction
+        .selectFrom("versions")
+        .select("resource_policy")
+        .where("draft_id", "=", result.id)
+        .where("version_number", "=", result.latest_version_number)
+        .executeTakeFirstOrThrow();
+      return { ...result, resourcePolicy: version.resource_policy };
     });
   }
 
@@ -500,8 +505,14 @@ export class DraftStorage {
     draftId: string;
     ownerId: string;
   }): Promise<void> {
-    await this.#operations.run(async () => {
-      await this.database.transaction().execute(async (transaction) => {
+    const blobKeys = await this.database
+      .transaction()
+      .execute(async (transaction) => {
+        const keys = await this.#blobKeysOfDraft(
+          transaction,
+          input.draftId,
+          input.ownerId,
+        );
         const result = await transaction
           .deleteFrom("drafts")
           .where("id", "=", input.draftId)
@@ -517,9 +528,9 @@ export class DraftStorage {
           targetId: input.draftId,
           userId: input.ownerId,
         });
+        return keys;
       });
-      await this.#cleanupOrphanedBlobsWithoutLock();
-    });
+    await this.#reclaimAfterCommit(input.draftId, blobKeys);
   }
 
   async updateAsAdmin(input: {
@@ -527,33 +538,31 @@ export class DraftStorage {
     draftId: string;
     status: DraftsTable["status"];
   }): Promise<StoredDraft> {
-    return this.#operations.run(async () => {
-      const updatedAt = new Date().toISOString();
-      return this.database.transaction().execute(async (transaction) => {
-        const result = await transaction
-          .updateTable("drafts")
-          .set({ status: input.status, updated_at: updatedAt })
-          .where("id", "=", input.draftId)
-          .returningAll()
-          .executeTakeFirst();
-        if (!result) {
-          throw new DraftNotFoundError();
-        }
-        await this.#insertAudit(transaction, {
-          action: "draft.admin_updated",
-          apiKeyId: null,
-          metadata: { status: input.status },
-          targetId: input.draftId,
-          userId: input.actorUserId,
-        });
-        const version = await transaction
-          .selectFrom("versions")
-          .select("resource_policy")
-          .where("draft_id", "=", result.id)
-          .where("version_number", "=", result.latest_version_number)
-          .executeTakeFirstOrThrow();
-        return { ...result, resourcePolicy: version.resource_policy };
+    const updatedAt = new Date().toISOString();
+    return this.database.transaction().execute(async (transaction) => {
+      const result = await transaction
+        .updateTable("drafts")
+        .set({ status: input.status, updated_at: updatedAt })
+        .where("id", "=", input.draftId)
+        .returningAll()
+        .executeTakeFirst();
+      if (!result) {
+        throw new DraftNotFoundError();
+      }
+      await this.#insertAudit(transaction, {
+        action: "draft.admin_updated",
+        apiKeyId: null,
+        metadata: { status: input.status },
+        targetId: input.draftId,
+        userId: input.actorUserId,
       });
+      const version = await transaction
+        .selectFrom("versions")
+        .select("resource_policy")
+        .where("draft_id", "=", result.id)
+        .where("version_number", "=", result.latest_version_number)
+        .executeTakeFirstOrThrow();
+      return { ...result, resourcePolicy: version.resource_policy };
     });
   }
 
@@ -561,8 +570,10 @@ export class DraftStorage {
     actorUserId: string;
     draftId: string;
   }): Promise<void> {
-    await this.#operations.run(async () => {
-      await this.database.transaction().execute(async (transaction) => {
+    const blobKeys = await this.database
+      .transaction()
+      .execute(async (transaction) => {
+        const keys = await this.#blobKeysOfDraft(transaction, input.draftId);
         const result = await transaction
           .deleteFrom("drafts")
           .where("id", "=", input.draftId)
@@ -577,9 +588,9 @@ export class DraftStorage {
           targetId: input.draftId,
           userId: input.actorUserId,
         });
+        return keys;
       });
-      await this.#cleanupOrphanedBlobsWithoutLock();
-    });
+    await this.#reclaimAfterCommit(input.draftId, blobKeys);
   }
 
   async resolvePublic(
@@ -614,9 +625,29 @@ export class DraftStorage {
     if (!version) {
       return { status: "unavailable" };
     }
+    let html: Buffer;
+    try {
+      html = await this.blobs.read(version.blob_key);
+    } catch (error) {
+      if (!isMissingFileError(error)) {
+        throw error;
+      }
+      const current = await this.database
+        .selectFrom("drafts")
+        .select(["expires_at", "status"])
+        .where("id", "=", draftId)
+        .executeTakeFirst();
+      if (!current || current.status !== "enabled") {
+        return { status: "unavailable" };
+      }
+      if (current.expires_at <= now.toISOString()) {
+        return { status: "expired" };
+      }
+      throw error;
+    }
     return {
       expiresAt: draft.expires_at,
-      html: await this.blobs.read(version.blob_key),
+      html,
       resourcePolicy: version.resource_policy,
       status: "available",
       title: draft.title,
@@ -704,54 +735,125 @@ export class DraftStorage {
   }
 
   async cleanupOrphanedBlobs(): Promise<number> {
-    return this.#operations.run(() => this.#cleanupOrphanedBlobsWithoutLock());
+    return this.#reclaimUnreferencedBlobs(await this.blobs.listKeys());
   }
 
   async cleanupExpired(now = new Date()): Promise<CleanupResult> {
-    return this.#operations.run(async () => {
-      const expired = await this.database
-        .selectFrom("drafts")
-        .select("id")
-        .where("expires_at", "<=", now.toISOString())
-        .orderBy("id")
-        .execute();
-      if (expired.length === 0) {
-        return { deletedDrafts: 0, reclaimedBlobs: 0 };
-      }
-      await this.database.transaction().execute(async (transaction) => {
-        const ids = expired.map((draft) => draft.id);
-        await transaction.deleteFrom("drafts").where("id", "in", ids).execute();
-        for (const draftId of ids) {
-          await this.#insertAudit(transaction, {
-            action: "draft.expired",
-            apiKeyId: null,
-            metadata: {},
-            targetId: draftId,
-            userId: null,
-          });
-        }
-      });
-      return {
-        deletedDrafts: expired.length,
-        reclaimedBlobs: await this.#cleanupOrphanedBlobsWithoutLock(),
-      };
-    });
+    const expiredAt = now.toISOString();
+    const candidates = await this.database
+      .selectFrom("drafts")
+      .select("id")
+      .where("expires_at", "<=", expiredAt)
+      .orderBy("id")
+      .execute();
+    let deletedDrafts = 0;
+    for (const batch of batches(
+      candidates.map((draft) => draft.id),
+      EXPIRY_BATCH_SIZE,
+    )) {
+      deletedDrafts += await this.database
+        .transaction()
+        .execute(async (transaction) => {
+          const deleted = await transaction
+            .deleteFrom("drafts")
+            .where("id", "in", batch)
+            .where("expires_at", "<=", expiredAt)
+            .returning("id")
+            .execute();
+          for (const draft of deleted) {
+            await this.#insertAudit(transaction, {
+              action: "draft.expired",
+              apiKeyId: null,
+              metadata: {},
+              targetId: draft.id,
+              userId: null,
+            });
+          }
+          return deleted.length;
+        });
+    }
+    return {
+      deletedDrafts,
+      reclaimedBlobs: await this.cleanupOrphanedBlobs(),
+      removedTemporaryFiles: await this.blobs.cleanupTemporaryFiles(now),
+    };
   }
 
-  async #cleanupOrphanedBlobsWithoutLock(): Promise<number> {
-    const references = new Set(
-      (
-        await this.database
-          .selectFrom("versions")
-          .select("blob_key")
-          .distinct()
-          .execute()
-      ).map((row) => row.blob_key),
-    );
-    const keys = await this.blobs.listKeys();
-    const orphaned = keys.filter((key) => !references.has(key));
-    await Promise.all(orphaned.map((key) => this.blobs.remove(key)));
-    return orphaned.length;
+  async #blobKeysOfDraft(
+    transaction: Transaction<DatabaseSchema>,
+    draftId: string,
+    ownerId?: string,
+  ): Promise<string[]> {
+    let query = transaction
+      .selectFrom("versions")
+      .innerJoin("drafts", "drafts.id", "versions.draft_id")
+      .select("versions.blob_key")
+      .distinct()
+      .where("versions.draft_id", "=", draftId);
+    if (ownerId !== undefined) {
+      query = query.where("drafts.owner_id", "=", ownerId);
+    }
+    const rows = await query.execute();
+    return rows.map((row) => row.blob_key);
+  }
+
+  async #reclaimAfterCommit(draftId: string, keys: string[]): Promise<void> {
+    try {
+      await this.#reclaimUnreferencedBlobs(keys);
+    } catch (error) {
+      this.logger.error(
+        { draftId, err: error },
+        "Blobs of a deleted draft could not be reclaimed; the retention cleanup retries.",
+      );
+    }
+  }
+
+  async #reclaimUnreferencedBlobs(keys: readonly string[]): Promise<number> {
+    let removed = 0;
+    for (const batch of batches(keys, RECLAMATION_BATCH_SIZE)) {
+      removed += await this.database
+        .transaction()
+        .execute(async (transaction) => {
+          const referenced = new Set(
+            (
+              await transaction
+                .selectFrom("versions")
+                .select("blob_key")
+                .distinct()
+                .where("blob_key", "in", batch)
+                .execute()
+            ).map((row) => row.blob_key),
+          );
+          let removedInBatch = 0;
+          for (const key of batch) {
+            if (referenced.has(key)) {
+              continue;
+            }
+            try {
+              await this.blobs.remove(key);
+              removedInBatch += 1;
+            } catch (error) {
+              this.logger.error(
+                { blobKey: key, err: error },
+                "An unreferenced blob could not be removed; the retention cleanup retries.",
+              );
+            }
+          }
+          return removedInBatch;
+        });
+    }
+    return removed;
+  }
+
+  async #discardPreparedBlob(blob: PreparedBlob): Promise<void> {
+    try {
+      await this.blobs.discard(blob);
+    } catch (error) {
+      this.logger.error(
+        { err: error, temporaryPath: blob.temporaryPath },
+        "A temporary upload file could not be removed; the retention cleanup removes it later.",
+      );
+    }
   }
 
   async #insertAudit(

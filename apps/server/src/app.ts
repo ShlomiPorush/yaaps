@@ -48,9 +48,11 @@ import {
 } from "./reports/api-routes.js";
 import { registerPublicReportRoutes } from "./reports/routes.js";
 import { RetentionCleanupWorker } from "./retention/cleanup-worker.js";
+import { RetentionLeaderLock } from "./retention/leader-lock.js";
 import { HtmlBlobStore } from "./storage/blob-store.js";
 import { openDatabase, type YaapsDatabase } from "./storage/database.js";
 import { DraftNotFoundError, DraftStorage } from "./storage/draft-storage.js";
+import { publishMissingFiles } from "./storage/shared-files.js";
 
 export interface YaapsDataLayer {
   authentication: AuthenticationRepository;
@@ -263,6 +265,7 @@ export async function buildApplication(
   };
   const application = Fastify(serverOptions);
   let cleanupWorker: RetentionCleanupWorker | null = null;
+  let sharedFilesPublished = true;
   application.decorate("yaapsData", null);
   configureRequestErrors(application);
 
@@ -273,21 +276,26 @@ export async function buildApplication(
       openedDatabase = database;
       const blobs = new HtmlBlobStore(options.dataDirectory);
       await blobs.initialize();
-      const drafts = new DraftStorage(database.connection, blobs);
+      const drafts = new DraftStorage(
+        database.connection,
+        blobs,
+        application.log,
+      );
       const authentication = new AuthenticationRepository(database.connection);
-      await blobs.cleanupTemporaryFiles();
-      await drafts.cleanupOrphanedBlobs();
+      const leaderLock = new RetentionLeaderLock(options.dataDirectory);
       application.yaapsData = { authentication, blobs, database, drafts };
       cleanupWorker = new RetentionCleanupWorker(
         drafts,
         options.cleanupIntervalSeconds ?? 300,
         application.log,
+        leaderLock,
       );
       cleanupWorker.start();
     } catch (error) {
-      application.log.error({ error }, "YAAPS data initialization failed.");
-      // onClose only closes a connection reachable via yaapsData; if init threw
-      // before that assignment, close the opened connection here to avoid a leak.
+      application.log.error(
+        { err: error },
+        "YAAPS data initialization failed.",
+      );
       if (!application.yaapsData && openedDatabase) {
         await openedDatabase.connection.destroy().catch(() => undefined);
       }
@@ -325,10 +333,14 @@ export async function buildApplication(
       .send("User-agent: *\nDisallow: /d/\n"),
   );
 
-  await registerDistributionRoutes(application, {
+  const distribution = await registerDistributionRoutes(application, {
     directory: options.skillDistributionDirectory,
     publicOrigin,
+    ...(application.yaapsData
+      ? { sharedDirectory: path.join(options.dataDirectory, "skill-downloads") }
+      : {}),
   });
+  sharedFilesPublished &&= distribution.sharedFilesPublished;
 
   if (application.yaapsData) {
     const authentication = options.authentication ?? {
@@ -396,7 +408,9 @@ export async function buildApplication(
       }
     }
     const ready =
-      databaseReady && (await probeDataDirectory(options.dataDirectory));
+      sharedFilesPublished &&
+      databaseReady &&
+      (await probeDataDirectory(options.dataDirectory));
     const response: ReadinessResponse = {
       checks: { dataDirectory: ready ? "ok" : "failed" },
       name: PRODUCT_NAME,
@@ -438,9 +452,27 @@ export async function buildApplication(
       await access(indexPath);
       const indexDocument = await readFile(indexPath, "utf8");
 
+      const sharedAssetsDirectory = path.join(
+        options.dataDirectory,
+        "dashboard-assets",
+      );
+      let assetRoots = [assetsDirectory];
+      try {
+        if (application.yaapsData) {
+          await publishMissingFiles(assetsDirectory, sharedAssetsDirectory);
+          assetRoots = [assetsDirectory, sharedAssetsDirectory];
+        }
+      } catch (error) {
+        sharedFilesPublished = false;
+        application.log.error(
+          { err: error },
+          "Dashboard assets could not be copied to the shared asset directory.",
+        );
+      }
+
       await application.register(fastifyStatic, {
         prefix: "/assets/",
-        root: assetsDirectory,
+        root: assetRoots,
       });
 
       // Share-preview images referenced by og:image live at the site root.

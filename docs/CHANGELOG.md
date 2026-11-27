@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Added
+
+- YAAPS can be updated with a zero-downtime rollout. The new container runs beside the old one on the same data directory while the old one drains, and the image tells docker rollout to drain it before it stops, so the reverse proxy stops sending it requests first. The host's Compose file must not override the image's health check; see "Two instances during a rollout" and "What the host's Compose file needs" in `docs/operations.md`.
+- Release images carry the `yaaps.compose-sha256` and `yaaps.rollout-from` labels for deployment tools that check whether a release can run beside the running one. `yaaps.rollout-from` is computed from the release history. The first release with rollout support, and any release with a breaking database change, is updated with a short stop; see "Rollout labels" in `docs/operations.md`.
+
+### Changed
+
+- A release run refuses a version whose image tag is already published, so a version tag never moves to another image. `latest` and the npm package are published in their own jobs, so either can be re-run without publishing the image again.
+- The image's health check runs every 5 seconds and reports a draining container as unhealthy.
+- Retention cleanup runs on one container at a time, removes unreferenced report files on every run, and removes temporary upload files only when they are older than one hour. The server no longer removes files at startup.
+- An older release now starts on a database that a newer release changed only with expand-only migrations, so going back to the previous image works after such an update. It still refuses a database changed by a breaking migration.
+- The skill installers download the skill package from an address that contains its checksum, so the package and its checksum always match during a rollout. The fixed download addresses keep working.
+- Each container copies its dashboard assets and skill package into `dashboard-assets/` and `skill-downloads/` in the data directory at startup. Do not delete these directories.
+
+### Fixed
+
+- A public report that is deleted while it is being read now answers "not found" instead of a server error.
+
 ## [1.9.0] - 2026-11-23
 
 ### Changed

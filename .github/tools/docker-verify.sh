@@ -23,6 +23,21 @@ wait_yaaps_http() {
   return 1
 }
 
+wait_container_health() {
+  local container="$1"
+  local expected="$2"
+  local timeout_seconds="$3"
+  local deadline=$((SECONDS + timeout_seconds))
+  while ((SECONDS < deadline)); do
+    if [[ "$(docker inspect --format '{{.State.Health.Status}}' "$container")" == "$expected" ]]; then
+      return
+    fi
+    sleep 1
+  done
+  printf 'Container health did not become %s within %s seconds.\n' "$expected" "$timeout_seconds" >&2
+  return 1
+}
+
 invoke_docker_verification() {
   require_command docker
   require_command curl
@@ -76,6 +91,9 @@ invoke_docker_verification() {
     printf 'The API reference bundle is missing from the runtime image.\n' >&2
     return 1
   }
+  wait_container_health "$container_name" healthy 60
+  docker exec "$container_name" touch /tmp/drain
+  wait_container_health "$container_name" unhealthy 25
   printf 'Docker verification passed on port %s (%s).\n' "$port" "$running_image"
   cleanup_docker_verification
   trap - EXIT

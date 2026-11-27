@@ -296,6 +296,60 @@ describe("foundation server", () => {
     await application.close();
   });
 
+  it("stays not ready but serves its own assets when the shared asset copy fails", async () => {
+    const dataDirectory = await temporaryDirectory();
+    const dashboardDirectory = await temporaryDirectory();
+    await mkdir(path.join(dashboardDirectory, "assets"));
+    await writeFile(
+      path.join(dashboardDirectory, "index.html"),
+      "<!doctype html><title>YAAPS dashboard</title>",
+      "utf8",
+    );
+    await writeFile(
+      path.join(dashboardDirectory, "assets", "index-0wn0wn.js"),
+      "own build",
+    );
+    await writeFile(path.join(dataDirectory, "dashboard-assets"), "occupied");
+    const application = await buildApplication({
+      dashboardDirectory,
+      dataDirectory,
+    });
+
+    const readiness = await application.inject({
+      method: "GET",
+      url: "/readyz",
+    });
+    const asset = await application.inject({
+      method: "GET",
+      url: "/assets/index-0wn0wn.js",
+    });
+
+    expect(readiness.statusCode).toBe(503);
+    expect(readinessResponseSchema.parse(readiness.json()).status).toBe(
+      "not_ready",
+    );
+    expect(asset.statusCode).toBe(200);
+    expect(asset.body).toBe("own build");
+
+    await application.close();
+  });
+
+  it("starts ready when the cleanup lock file cannot be opened", async () => {
+    const directory = await temporaryDirectory();
+    await mkdir(path.join(directory, "yaaps-leader.sqlite"));
+    const application = await buildApplication({ dataDirectory: directory });
+    try {
+      expect(application.yaapsData).not.toBeNull();
+      const response = await application.inject({
+        method: "GET",
+        url: "/readyz",
+      });
+      expect(response.statusCode).toBe(200);
+    } finally {
+      await application.close();
+    }
+  });
+
   it("returns a stable public error for unknown routes", async () => {
     const application = await buildApplication({
       dataDirectory: await temporaryDirectory(),

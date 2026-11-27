@@ -6,12 +6,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { HtmlBlobStore } from "./blob-store.js";
 import { openDatabase, type YaapsDatabase } from "./database.js";
-import { DraftNotFoundError, DraftStorage } from "./draft-storage.js";
+import {
+  DraftNotFoundError,
+  DraftStorage,
+  type StorageLogger,
+} from "./draft-storage.js";
 
 const temporaryPaths: string[] = [];
 let database: YaapsDatabase;
 let storage: DraftStorage;
 let blobs: HtmlBlobStore;
+let logger: { error: ReturnType<typeof vi.fn<StorageLogger["error"]>> };
 
 async function temporaryDirectory(): Promise<string> {
   const directory = await mkdtemp(path.join(tmpdir(), "yaaps-drafts-test-"));
@@ -29,7 +34,8 @@ beforeEach(async () => {
   const directory = await temporaryDirectory();
   database = await openDatabase(directory);
   blobs = new HtmlBlobStore(directory);
-  storage = new DraftStorage(database.connection, blobs);
+  logger = { error: vi.fn() };
+  storage = new DraftStorage(database.connection, blobs, logger);
   await database.connection
     .insertInto("users")
     .values([
@@ -396,6 +402,7 @@ describe("owner-scoped draft storage", () => {
     await expect(storage.cleanupExpired(now)).resolves.toEqual({
       deletedDrafts: 1,
       reclaimedBlobs: 1,
+      removedTemporaryFiles: 0,
     });
     await expect(blobs.read(expired.blobKey)).rejects.toThrow();
     await expect(blobs.read(live.blobKey)).resolves.toEqual(
@@ -416,7 +423,7 @@ describe("owner-scoped draft storage", () => {
     });
   });
 
-  it("recovers orphaned blobs after an interrupted expiry cleanup", async () => {
+  it("recovers orphaned blobs after a failed removal during expiry cleanup", async () => {
     const now = new Date("2026-08-24T12:00:00.000Z");
     const expired = await storage.createDraft({
       expiresAt: new Date(now.getTime() - 1_000).toISOString(),
@@ -427,9 +434,11 @@ describe("owner-scoped draft storage", () => {
       .spyOn(blobs, "remove")
       .mockRejectedValueOnce(new Error("Simulated interruption"));
 
-    await expect(storage.cleanupExpired(now)).rejects.toThrow(
-      "Simulated interruption",
-    );
+    await expect(storage.cleanupExpired(now)).resolves.toMatchObject({
+      deletedDrafts: 1,
+      reclaimedBlobs: 0,
+    });
+    expect(logger.error).toHaveBeenCalledOnce();
     await expect(
       storage.findForOwner("user-first", expired.draftId),
     ).resolves.toBeUndefined();

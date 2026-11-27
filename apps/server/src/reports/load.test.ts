@@ -79,7 +79,11 @@ describe("bounded single-instance load", () => {
       expect(versions.every((response) => response.statusCode === 201)).toBe(
         true,
       );
-      expect(cleanup).toEqual({ deletedDrafts: 0, reclaimedBlobs: 0 });
+      expect(cleanup).toEqual({
+        deletedDrafts: 0,
+        reclaimedBlobs: 0,
+        removedTemporaryFiles: 0,
+      });
     }
 
     const reads = await Promise.all(

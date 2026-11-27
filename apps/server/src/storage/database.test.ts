@@ -7,6 +7,7 @@ import { sql } from "kysely";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { openDatabase } from "./database.js";
+import { YAAPS_MIGRATIONS } from "./migrations.js";
 
 const temporaryPaths: string[] = [];
 
@@ -232,6 +233,32 @@ describe("database migrations", () => {
       ).rejects.toThrow();
     } finally {
       await migrated.connection.destroy();
+    }
+  });
+
+  it("names every migration with a number and at most the breaking marker", () => {
+    const names = Object.keys(YAAPS_MIGRATIONS);
+    expect(names.length).toBeGreaterThan(0);
+    for (const name of names) {
+      expect(name).toMatch(/^\d{3}_[a-z0-9]+(?:_[a-z0-9]+)*(?:\.breaking)?$/);
+    }
+  });
+
+  it("numbers every migration uniquely and in order", () => {
+    const numbers = Object.keys(YAAPS_MIGRATIONS).map((name) =>
+      Number(name.slice(0, 3)),
+    );
+    expect(new Set(numbers).size).toBe(numbers.length);
+    expect(numbers).toEqual([...numbers].sort((left, right) => left - right));
+  });
+
+  it("writes every migration name as a literal that the release workflow reads", async () => {
+    const source = await readFile(
+      new URL("./migrations.ts", import.meta.url),
+      "utf8",
+    );
+    for (const name of Object.keys(YAAPS_MIGRATIONS)) {
+      expect(source).toContain(`"${name}":`);
     }
   });
 
